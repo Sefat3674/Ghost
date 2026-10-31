@@ -1,0 +1,40 @@
+# Python virtual environments
+.venv/
+.venv312/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environment variables and secrets
+.env
+.env.*
+
+# IDE
+.vscode/
+
+# Logs
+*.log
+
+# Build files
+build/
+dist/
+*.egg-info/
+
+# Private credentials
+config/api_keys.json
+config/guardian.json
+config/smart_home.json
+
+# Private credentials
+config/api_keys.json
+config/guardian.json
+config/smart_home.json
+
+# Private credentials
+config/api_keys.json
+config/guardian.json
+config/smart_home.json
