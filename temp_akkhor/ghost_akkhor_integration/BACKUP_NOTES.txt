@@ -1,0 +1,7 @@
+Integration bundle built against the uploaded GHOST ui.py and main.py.
+Before applying, back up your current ui.py and main.py.
+Copy the bundled ui.py and main.py over the matching files in your GHOST root.
+Copy actions/akkhor/ and config/akkhor_config.json into the same relative paths.
+The panel implements login plus read-only GET requests for configured resources.
+The endpoint paths are configurable because exact Swagger response schemas were not supplied.
+No database connection is made; all calls go through Akkhor's HTTP API.

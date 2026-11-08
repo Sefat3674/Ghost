@@ -38,3 +38,5 @@ config/smart_home.json
 config/api_keys.json
 config/guardian.json
 config/smart_home.json
+
+.env

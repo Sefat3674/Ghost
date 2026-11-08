@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import threading
 import json
 import sys
@@ -1340,6 +1340,124 @@ for _decl in TOOL_DECLARATIONS:
                              "before executing this confirmed action.")}
 
 
+
+
+AKKHOR_TOOL_DECLARATIONS = [
+    {
+        "name": "akkhor_school",
+        "description": (
+            "Access the connected Akkhor School Management System. "
+            "Use this tool to read school data and manage users. "
+            "The user must sign in through the GHOST Akkhor panel. "
+            "Actions: status, classes, enrollments, students, "
+            "assignments, submissions, class_courses, class_sections, "
+            "users, create_user, get_user, update_user, delete_user, "
+            "roles, assign_role, reset_password, set_status, user_roles. "
+            "For sensitive actions, obtain explicit user confirmation."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+
+                "action": {
+                    "type": "STRING",
+                    "description": (
+                        "status, classes, enrollments, students, "
+                        "assignments, submissions, class_courses, "
+                        "class_sections, users, create_user, get_user, "
+                        "update_user, delete_user, roles, assign_role, "
+                        "reset_password, set_status, user_roles."
+                    )
+                },
+
+                "classId": {
+                    "type": "STRING",
+                    "description": "Required for class_courses and class_sections."
+                },
+
+                "userId": {
+                    "type": "STRING",
+                    "description": "Akkhor user UUID."
+                },
+
+                "fullName": {
+                    "type": "STRING",
+                    "description": "User full name."
+                },
+
+                "email": {
+                    "type": "STRING",
+                    "description": "User email address."
+                },
+
+                "password": {
+                    "type": "STRING",
+                    "description": "Password for creating a user."
+                },
+
+                "newPassword": {
+                    "type": "STRING",
+                    "description": "New password for password reset."
+                },
+
+                "phoneNumber": {
+                    "type": "STRING",
+                    "description": "User phone number."
+                },
+
+                "role": {
+                    "type": "STRING",
+                    "description": "Akkhor role name."
+                },
+
+                "isActive": {
+                    "type": "BOOLEAN",
+                    "description": "True to activate, false to deactivate."
+                },
+
+                "confirm": {
+                    "type": "BOOLEAN",
+                    "description": "Explicit user confirmation for sensitive actions."
+                }
+            },
+            "required": ["action"]
+        }
+    }
+]
+SMART_MANUFACTURING_TOOL_DECLARATIONS = [
+    {
+        "name": "smart_manufacturing",
+        "description": (
+            "Read-only access to the PRAN-RFL Smart Manufacturing system. "
+            "Use this tool for machine audit reports, machine counts, "
+            "smart machine percentages, smartable machines, manual machines, "
+            "OEE, runtime, and finding which section has the most machines. "
+            "Supports filtering by mother company, business unit, location, "
+            "and section. Pass the user's complete natural-language question "
+            "in the command parameter. Examples: "
+            "'Show me the PRAN machine audit report', "
+            "'How many smartable machines are there?', "
+            "'Which section has the most machines?'"
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "command": {
+                    "type": "STRING",
+                    "description": (
+                        "The complete natural-language Smart Manufacturing "
+                        "question from the user."
+                    )
+                }
+            },
+            "required": ["command"]
+        }
+    }
+]
+
+
+
+
 class GHOSTLive:
 
     def __init__(self, ui: GHOSTUI, enable_bluetooth: bool = False):
@@ -1361,6 +1479,13 @@ class GHOSTLive:
         self._roll_turns    = 0
         self._human_confirmed = False
         self.loop_guard     = LoopGuard()
+        from actions.akkhor.service import AkkhorService
+        self.akkhor_service = AkkhorService(BASE_DIR)
+        self.ui.set_akkhor_service(self.akkhor_service)
+       
+
+        self._smart_manufacturing_handler = None
+        self._smart_manufacturing_lock = threading.Lock()
         self._tool_handlers = self._build_tool_handlers()
         self.ui.on_text_command = self._on_text_command
         self.enable_bluetooth = False
@@ -1754,6 +1879,88 @@ class GHOSTLive:
             f = getattr(m, fn)
             return lambda a: f(parameters=a, *extra_args, **extra_kwargs)
 
+        def _smart_manufacturing(args):
+            """Run a read-only Smart Manufacturing query using one reused login session."""
+            command = str(args.get("command") or args.get("query") or "").strip()
+            if not command:
+                return "Please provide a Smart Manufacturing question."
+
+            # The lock prevents simultaneous voice/Telegram calls from creating
+            # multiple authenticated sessions during first-time initialization.
+            with self._smart_manufacturing_lock:
+                if self._smart_manufacturing_handler is None:
+                    from actions.smart_manufacturing.config import SmartManufacturingConfig
+                    from actions.smart_manufacturing.authentication import SmartManufacturingAuth
+                    from actions.smart_manufacturing.client import SmartManufacturingClient
+                    from actions.smart_manufacturing.lookup_service import SmartManufacturingLookup
+                    from actions.smart_manufacturing.report_service import MachineAuditReportService
+                    from actions.smart_manufacturing.voice_handler import SmartManufacturingVoiceHandler
+
+                    config = SmartManufacturingConfig()
+                    auth = SmartManufacturingAuth(config)
+                    try:
+                        auth.login()
+                        client = SmartManufacturingClient(config, auth)
+                        lookup = SmartManufacturingLookup(client)
+                        report_service = MachineAuditReportService(client, lookup)
+                        self._smart_manufacturing_handler = SmartManufacturingVoiceHandler(
+                            client, lookup, report_service
+                        )
+                    except Exception:
+                        auth.close()
+                        raise
+
+                handler = self._smart_manufacturing_handler
+
+            # Process the user's Smart Manufacturing command.
+                result = handler.handle(command)
+
+                # Get structured dashboard data generated by the handler.
+                visualization_data = handler.last_visualization_data
+
+                # Send dashboard data to the Ghost UI.
+                if visualization_data:
+                    self.ui.show_smart_manufacturing_dashboard(
+                        visualization_data
+                    )
+
+                # Preserve the original voice/text response.
+                return result
+
+        def _refresh_sm_dashboard(selected_filters):
+            try:
+                with self._smart_manufacturing_lock:
+                    handler = self._smart_manufacturing_handler
+
+                    if handler is None:
+                        raise RuntimeError(
+                            "Smart Manufacturing is not initialized."
+                        )
+
+                    current_data = handler.last_visualization_data
+
+                    if not current_data:
+                        raise RuntimeError(
+                            "Run a Smart Manufacturing voice query first."
+                        )
+
+                    updated_data = handler.refresh_dashboard(
+                        selected_filters,
+                        current_data
+                    )
+
+                self.ui.show_smart_manufacturing_dashboard(updated_data)
+                self.ui.write_log(
+                    "SYS: Smart Manufacturing filters applied."
+                )
+
+            except Exception as exc:
+                self.ui.write_log(
+                    f"ERR: Smart Manufacturing filter ? {str(exc)[:160]}"
+                )
+
+        self.ui.on_sm_filter_change = _refresh_sm_dashboard
+
         return {
             "open_app":          (_lazy("actions.open_app", "open_app", response=None, player=ui), 60),
             "weather_report":    (_lazy("actions.weather_report", "weather_action", player=ui), 60),
@@ -1808,7 +2015,11 @@ class GHOSTLive:
             "create_presentation": (_office_pptx, 60),
             "create_spreadsheet":  (_office_xlsx, 60),
             "smart_home_control":  (_smart_home, 30),
+            "akkhor_school":       (lambda a: self.akkhor_service.tool_action(a), 45),
+            "smart_manufacturing": (_smart_manufacturing, 90),
         }
+
+    
 
     async def _dispatch_tool(self, name: str, args: dict) -> ToolResult:
         from safety import sanitize as _sanitize
@@ -1867,6 +2078,8 @@ class GHOSTLive:
         print(f"[Telegram] 🔧 {name} {_sanitize(name, args)}")
         return await run_sync_tool(lambda: fn(args), name, timeout=timeout)
 
+    
+
     def _build_config(self):
         from datetime import datetime
 
@@ -1909,7 +2122,7 @@ class GHOSTLive:
             output_audio_transcription={},
             input_audio_transcription={},
             system_instruction="\n".join(parts),
-            tools=[{"function_declarations": TOOL_DECLARATIONS}],
+            tools=[{"function_declarations": TOOL_DECLARATIONS+ AKKHOR_TOOL_DECLARATIONS+ SMART_MANUFACTURING_TOOL_DECLARATIONS}],
             session_resumption=types.SessionResumptionConfig(),
             context_window_compression=types.ContextWindowCompressionConfig(
                 sliding_window=types.SlidingWindow()
@@ -2265,7 +2478,9 @@ class GHOSTLive:
         gtypes = import_module("google.genai.types")
         config = gtypes.GenerateContentConfig(
             system_instruction=self._telegram_context(),
-            tools=[{"function_declarations": TOOL_DECLARATIONS}],
+            tools=[{
+    "function_declarations": TOOL_DECLARATIONS + AKKHOR_TOOL_DECLARATIONS + SMART_MANUFACTURING_TOOL_DECLARATIONS
+}],
             temperature=0.4,
         )
         contents = [gtypes.Content(parts=[gtypes.Part(text=str(text))])]

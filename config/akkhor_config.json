@@ -1,0 +1,26 @@
+
+{
+  "base_url": "https://localhost:50268",
+  "timeout": 30,
+  "endpoints": {
+    "login": "/api/Auth/login",
+    "me": "/api/Auth/me",
+
+    "classes": "/api/student-enrollments/classes",
+    "enrollments": "/api/student-enrollments",
+    "students": "/api/student-enrollments/students",
+    "assignments": "/api/student-assignments",
+    "submissions": "/api/assignment-submissions",
+
+    "class_courses": "/api/student-enrollments/classes/{classId}/courses",
+    "class_sections": "/api/student-enrollments/classes/{classId}/sections",
+
+    "users": "/api/users",
+    "user_details": "/api/users/{id}",
+    "user_roles": "/api/users/roles",
+    "assign_role": "/api/users/assign-role",
+    "reset_password": "/api/users/{id}/reset-password",
+    "user_status": "/api/users/{id}/status",
+    "user_assigned_roles": "/api/users/{id}/roles"
+  }
+}

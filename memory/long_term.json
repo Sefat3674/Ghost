@@ -36,6 +36,38 @@
     "conversation_2026-10-30_21-20": {
       "value": "User: Hello.\nGHOST: Hello again. Is there anything else I can help you with?\nUser: です 。 来い 。 て やる よ 、 どけ たん 。 騒い でん の は かずき 。 やろ 、 じゅん 。\nGHOST: \nUser: Oh, achso.\nGHOST: お話し中 のところ すみません。 文 脈 や 話 の内容 が わから なくて、 ちょっ と理解 が追 いつ いてい ないです。 どの ような こと でお困 りで すか?\nUser: \nGHOST: I've noticed the high CPU usage. Currently, winlogon.exe, wininit.exe, and some VNC processes are among the top consumers. I",
       "updated": "2026-10-30"
+    },
+    "conversation_2026-10-31_15-13": {
+      "value": "User: \nGHOST: I have opened Akkhor School.\nUser: \nGHOST: To log in, you'll need to sign in through the GHOST Akkhor School panel. I can't directly enter credentials for you.\nUser: \nGHOST: You'll need to use the dedicated GHOST Akkhor School panel to sign in; I can't directly enter your credentials.\nUser: \nGHOST: Please enter that email address into the login panel on your screen. I cannot submit l",
+      "updated": "2026-10-31"
+    },
+    "conversation_2026-11-01_11-44": {
+      "value": "User: \nGHOST: Greetings. How can I assist you today?\nUser: \nGHOST: I'm not currently connected to Akkhor School. Please open the Akkhor panel in GHOST and sign in.\nUser: \nGHOST: I am GHOST, a sharp, efficient AI assistant designed for direct computer control and task execution. I am ready to help with files, browsing, media, and managing your schedule. Currently, I am running on your computer, tho",
+      "updated": "2026-11-01"
+    },
+    "conversation_2026-11-01_12-24": {
+      "value": "User: \nGHOST: I cannot display your classes because you are not connected yet. Please sign in from the GHOST Akkhor panel first.\nUser: \nGHOST: Here are your Akkhor classes: Class 1, Class 10, Class 2, Class 3, Class 4, Class 5, Class 6, Class 7, Class 8, Class 9, KG, Nursery, and Play.\nUser: \nGHOST: I don't have information on the number of sections available. My current tools let me see classes, ",
+      "updated": "2026-11-01"
+    },
+    "conversation_2026-11-01_12-40": {
+      "value": "User: \nGHOST: Please sign in through the GHOST Akkhor panel first to use this feature.\nUser: \nGHOST: Here is the current enrollment information you requested.\nUser: \nGHOST: I am unable to access that information at the moment. Access was forbidden.\nUser: \nGHOST: There are currently no assignment submissions recorded.\nUser: \nGHOST: I still have no information on the number of classes. Please ensure",
+      "updated": "2026-11-01"
+    },
+    "conversation_2026-11-08_13-33": {
+      "value": "User: \nGHOST: The statistical report for PRAN is ready. Out of 27,702 machines, only 2,386 are classified as smart, which is about 8.78%.\nUser: \nGHOST: There are 27,702 machines in total.\nUser: \nGHOST: We have 2,432 smartable machines.\nUser: \nGHOST: The smart machine percentage for PRAN is 98.11%.\nUser: \nGHOST: Approximately 91.39% of the machines are manually operated.\nUser: \nGHOST: 1.98 percent ",
+      "updated": "2026-11-08"
+    },
+    "conversation_2026-11-08_14-29": {
+      "value": "User: \nGHOST: Greetings. How can I assist you today?\nUser: \nGHOST: There are 27,702 machines for PRAN.\nUser: \nGHOST: There are 32,646 machines for RFL.\nUser: \nGHOST: Can you please clarify what you would like to do with PIP?\nUser: \nGHOST: There are 14,339 machines for PIP.\nUser: \nGHOST: There are 1,148 smart machines for PIP.\nUser: \nGHOST: No machine audit records were found for that location and ",
+      "updated": "2026-11-08"
+    },
+    "conversation_2026-11-08_16-07": {
+      "value": "User: É novo. Hello.\nGHOST: Greetings. How can I assist you today?\nUser: Hello, how many machines in Pran?\nGHOST: There are 27,702 machines for PRAN.\nUser: Are are are you quite emotional so?\nGHOST: I don't experience emotions; I operate purely on logic and information. How can I help you next?\nUser: Hello.\nGHOST: Hello. How can I help you today?\nUser: How How many machines in RFL? mother company ",
+      "updated": "2026-11-08"
+    },
+    "conversation_2026-11-08_16-18": {
+      "value": "User: \nGHOST: I have retrieved the general report. Could you please clarify which aspect you'd like to discuss, like OEE enablement or runtime?\nUser: \nGHOST: Regarding performance, 13,994 machines are OEE enabled, representing 22.86 percent. Is there a particular business unit or section you'd like to focus on?\nUser: \nGHOST: There are 7,327 smart machines and 53,829 non-smartable machines. Anythin",
+      "updated": "2026-11-08"
     }
   }
 }

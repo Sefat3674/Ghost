@@ -1,0 +1,9 @@
+{
+  "base_url": "https://localhost:50268",
+  "timeout": 30,
+  "endpoints": {
+    "assignments": "/api/assignments",
+    "submissions": "/api/assignment-submissions",
+    "students": "/api/users"
+  }
+}
