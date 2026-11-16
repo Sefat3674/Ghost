@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import threading
 import json
 import sys
@@ -300,31 +300,47 @@ _memory_running    = False
 def _update_memory_async(user_text: str, assistant_text: str) -> None:
     global _last_memory_input, _memory_running
 
-    user_text   = (user_text   or "").strip()
+    user_text = (user_text or "").strip()
     assistant_text = (assistant_text or "").strip()
 
     if len(user_text) < 5 or user_text == _last_memory_input:
+        print("[Memory] Skipped: short or duplicate user text.")
         return
 
     with _memory_lock:
         if _memory_running:
-            print("[Memory] ⏳ Already extracting — skipping this turn.")
+            print("[Memory] Already extracting ? skipping this turn.")
             return
         _memory_running = True
 
     _last_memory_input = user_text
 
     try:
+        print("[Memory] Automatic extraction started.")
         api_key = _get_api_key()
-        if not should_extract_memory(user_text, assistant_text, api_key):
+
+        detected = should_extract_memory(user_text, assistant_text, api_key)
+        print(f"[Memory] Detection result: {detected}")
+
+        if not detected:
+            print("[Memory] No memorable information detected.")
             return
+
         data = extract_memory(user_text, assistant_text, api_key)
+        print(f"[Memory] Extraction result: {data}")
+
         if data:
             update_memory(data)
-            print(f"[Memory] ✅ {list(data.keys())}")
+            print(f"[Memory] Automatically saved: {list(data.keys())}")
+        else:
+            print("[Memory] Extraction returned no data.")
+
     except Exception as e:
         if "429" not in str(e):
-            print(f"[Memory] ⚠️ {e}")
+            print(f"[Memory] Automatic extraction error: {e}")
+        else:
+            print("[Memory] Gemini rate limit reached (429).")
+
     finally:
         with _memory_lock:
             _memory_running = False
@@ -1008,6 +1024,96 @@ TOOL_DECLARATIONS = [
             "required": ["action"]
         }
     },
+    
+    
+    
+    {
+        "name": "outlook",
+        "description": (
+            "Microsoft Outlook assistant for Ghost. Use this tool for "
+            "reading inbox emails, unread messages, searching emails, "
+            "reading complete emails, listing folders, viewing calendar "
+            "events, contacts, attachments, checking the Outlook profile, "
+            "and AI-powered email summarization. "
+            "Can also generate professional email replies using Gemini "
+            "in English or Bangla. "
+            "Reply workflow: draft_reply generates a draft only; "
+            "show_draft displays the pending draft; "
+            "revise_reply revises it; "
+            "send_reply sends it only after the user explicitly confirms "
+            "sending the displayed draft. "
+            "NEVER send an email merely because a draft was generated. "
+            "NEVER assume confirmation. "
+            "Actions: read, inbox, unread, search, read_email, folders, "
+            "calendar, contacts, attachments, profile, summarize, "
+            "draft_reply, show_draft, revise_reply, send_reply."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": (
+                        "read | inbox | unread | search | read_email | "
+                        "folders | calendar | contacts | attachments | "
+                        "profile | summarize | draft_reply | show_draft | "
+                        "revise_reply | send_reply"
+                    )
+                },
+                "query": {
+                    "type": "STRING",
+                    "description": "Search keyword for emails or contacts."
+                },
+                "limit": {
+                    "type": "INTEGER",
+                    "description": "Maximum results (default 10, maximum 25)."
+                },
+                "message_id": {
+                    "type": "STRING",
+                    "description": (
+                        "Outlook message ID. Required to read an email "
+                        "or generate its reply."
+                    )
+                },
+                "language": {
+                    "type": "STRING",
+                    "description": "Reply language: English or Bangla."
+                },
+                "instruction": {
+                    "type": "STRING",
+                    "description": (
+                        "Instructions for revising a pending reply, "
+                        "such as make it shorter or more professional."
+                    )
+                },
+                "draft_id": {
+                    "type": "STRING",
+                    "description": (
+                        "ID of the pending reply draft to display, revise, "
+                        "or send."
+                    )
+                },
+                "draft_hash": {
+    "type": "STRING",
+    "description": (
+        "Exact draft hash returned by show_draft. Required "
+        "when sending a reply."
+    )
+},
+                "confirm": {
+    "type": "BOOLEAN",
+    "description": (
+        "Set true only after the user explicitly approves "
+        "the exact Outlook reply being sent."
+    )
+}
+            },
+            "required": []
+        }
+    },
+
+
+
     {
         "name": "gmail",
         "description": (
@@ -1478,6 +1584,9 @@ class GHOSTLive:
         self._rolling_len   = 0
         self._roll_turns    = 0
         self._human_confirmed = False
+        self._awaiting_human_confirmation = False
+        self._pending_human_fingerprint = None
+        self._approved_human_fingerprint = None
         self.loop_guard     = LoopGuard()
         from actions.akkhor.service import AkkhorService
         self.akkhor_service = AkkhorService(BASE_DIR)
@@ -1610,19 +1719,54 @@ class GHOSTLive:
             import traceback; traceback.print_exc()
 
     def _mark_human_confirmed(self):
+        if self._pending_human_fingerprint is None:
+            return
+
+        self._approved_human_fingerprint = self._pending_human_fingerprint
+        self._pending_human_fingerprint = None
         self._human_confirmed = True
-        print("[GHOST] 🛡️ Human confirmation verified out-of-band.")
+        self._awaiting_human_confirmation = False
+        print("[GHOST] Human confirmation bound to the pending action.")
+
+    def _handle_confirmation_text(self, text: str):
+        normalized = re.sub(r"[^\w\s]", "", (text or "").lower())
+        normalized = " ".join(normalized.split())
+
+        affirmative = {
+            "yes", "yeah", "yep", "sure", "ok", "okay",
+            "proceed", "approve", "yes send it", "yes go ahead",
+            "ha",
+            "\u09b9\u09cd\u09af\u09be",
+            "\u099c\u09bf",
+            "\u09a0\u09bf\u0995 \u0986\u099b\u09c7"
+        }
+        negative = {
+            "no", "nope", "nah", "cancel", "stop",
+            "\u09a8\u09be", "\u09a8\u09be\u09b9"
+        }
+
+        if not self._awaiting_human_confirmation:
+            return
+
+        if normalized in affirmative:
+            self._mark_human_confirmed()
+        elif normalized in negative:
+            self._pending_human_fingerprint = None
+            self._approved_human_fingerprint = None
+            self._awaiting_human_confirmation = False
+            self._human_confirmed = False
+            print("[GHOST] Pending action approval cancelled.")
 
     def _on_text_command(self, text: str):
-        _words = set(re.findall(r"\w+", (text or "").lower()))
-        _affirmative = {"yes", "yeah", "yep", "sure", "ok", "okay", "proceed", "allow", "approve", "ha", "albatta", "evet", "olur"}
-        if _words & _affirmative:
-            self._mark_human_confirmed()
+        self._handle_confirmation_text(text)
+
         if not self._loop or not self.session or not self._send_lock:
             return
+
         async def _send():
             async with self._send_lock:
                 await self.session.send_realtime_input(text=text)
+
         asyncio.run_coroutine_threadsafe(_send(), self._loop)
 
     def set_speaking(self, value: bool):
@@ -1994,6 +2138,7 @@ class GHOSTLive:
             "set_mode":          (_set_mode, 10),
             "set_voice":         (_set_voice, 10),
             "set_mood":          (_set_mood, 10),
+            "outlook":           (_lazy("actions.outlook", "outlook_action", response=None, player=ui), 60),
             "gmail":             (_lazy("actions.gmail", "gmail_action", response=None, player=ui), 60),
             "read_pdf":          (_lazy("actions.pdf_reader", "read_pdf", response=None, player=ui), 60),
             "pdf_qa":            (_lazy("actions.pdf_reader", "pdf_qa", response=None, player=ui), 90),
@@ -2033,6 +2178,7 @@ class GHOSTLive:
             needs_confirmation, describe, CONFIRM_MESSAGE,
             CONFIRM_PARAM, CONFIRM_TOKEN_PARAM, issue_confirmation_token,
         )
+        from safety import _fingerprint
         confirm = bool(args.pop(CONFIRM_PARAM, False))
         confirm_token = str(args.pop(CONFIRM_TOKEN_PARAM, ""))
         face_verify = bool(args.pop("face_verify", False))
@@ -2040,6 +2186,9 @@ class GHOSTLive:
             token = issue_confirmation_token(name, args) if not confirm else ""
             print(f"[GHOST] ⛔ {name} blocked — confirmation required")
             self._human_confirmed = False
+            self._pending_human_fingerprint = _fingerprint(name, args)
+            self._approved_human_fingerprint = None
+            self._awaiting_human_confirmation = True
             return ToolResult(
                 ok=True,
                 content=CONFIRM_MESSAGE.format(desc=describe(name, args),
@@ -2048,13 +2197,14 @@ class GHOSTLive:
                 error_kind="confirmation",
             )
         # Defense-in-depth: if confirm is asserted, require human verification
-        if confirm and not getattr(self, "_human_confirmed", True):
+        if confirm and self._approved_human_fingerprint != _fingerprint(name, args):
             print(f"[GHOST] ⛔ {name} rejected — no human consent detected.")
             return ToolResult(
                 ok=True,
                 content="Action blocked: human user has not verbally approved this yet. Ask the user for permission first.",
                 error_kind="confirmation",
             )
+        self._approved_human_fingerprint = None
         self._human_confirmed = False
 
         entry = self._tool_handlers.get(name)
@@ -2232,12 +2382,16 @@ class GHOSTLive:
             needs_confirmation, describe, CONFIRM_MESSAGE,
             CONFIRM_PARAM, CONFIRM_TOKEN_PARAM, issue_confirmation_token, sanitize,
         )
+        from safety import _fingerprint
         confirm = bool(args.pop(CONFIRM_PARAM, False))
         confirm_token = str(args.pop(CONFIRM_TOKEN_PARAM, ""))
         if needs_confirmation(name, args, confirm=confirm, confirm_token=confirm_token):
             token = issue_confirmation_token(name, args) if not confirm else ""
             print(f"[GHOST] ⛔ {name} blocked — confirmation required")
             self._human_confirmed = False
+            self._pending_human_fingerprint = _fingerprint(name, args)
+            self._approved_human_fingerprint = None
+            self._awaiting_human_confirmation = True
             log_tool(name, args, error="confirmation required")
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
@@ -2247,12 +2401,13 @@ class GHOSTLive:
                     desc=describe(name, args), param=CONFIRM_PARAM)
                     + (f"\n[token: {token}]" if token else "")}
             )
-        if confirm and not getattr(self, "_human_confirmed", True):
+        if confirm and self._approved_human_fingerprint != _fingerprint(name, args):
             print(f"[GHOST] ⛔ {name} rejected — no human consent detected.")
             return types.FunctionResponse(
                 id=fc.id, name=name,
                 response={"result": "Action blocked: human user has not verbally approved this yet. Ask the user for permission first."}
             )
+        self._approved_human_fingerprint = None
         self._human_confirmed = False
 
 
@@ -2833,10 +2988,7 @@ class GHOSTLive:
                             full_in = " ".join(in_buf).strip()
                             if full_in:
                                 self.ui.write_log(f"You: {full_in}")
-                                _words = set(re.findall(r"\w+", full_in.lower()))
-                                _affirmative = {"yes", "yeah", "yep", "sure", "ok", "okay", "proceed", "allow", "approve", "ha", "albatta", "evet", "olur"}
-                                if _words & _affirmative:
-                                    self._mark_human_confirmed()
+                                self._handle_confirmation_text(full_in)
                             in_buf = []
 
                             full_out = " ".join(out_buf).strip()
@@ -2896,7 +3048,17 @@ class GHOSTLive:
             )
             stream.start()
             while True:
-                chunk = await self.audio_in_queue.get()
+                try:
+                    chunk = await asyncio.wait_for(
+                        self.audio_in_queue.get(),
+                        timeout=0.5
+                    )
+                except asyncio.TimeoutError:
+                    if self.audio_in_queue.empty() and self._turn_complete:
+                        self._turn_complete = False
+                        self.set_speaking(False)
+                    continue
+
                 if getattr(self.ui, "silent_mode", False):
                     self.set_speaking(False)
                     continue

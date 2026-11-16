@@ -1,0 +1,460 @@
+========== GHOST OUTLOOK SOURCE CODE ==========
+
+
+==============================================
+FILE: outlook/config.py
+==============================================
+
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Project root: kaizumi/
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+load_dotenv(PROJECT_ROOT / ".env")
+
+CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID", "").strip()
+
+TENANT_ID = os.getenv(
+    "MICROSOFT_TENANT_ID",
+    "organizations"
+).strip()
+
+AUTHORITY = (
+    f"https://login.microsoftonline.com/{TENANT_ID}"
+)
+
+REDIRECT_URI = "http://localhost"
+
+GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
+
+SCOPES = [
+    "User.Read",
+    "Mail.Read"
+]
+
+CACHE_DIRECTORY = (
+    Path(os.getenv("LOCALAPPDATA", str(Path.home())))
+    / "Ghost"
+    / "Outlook"
+)
+
+CACHE_FILE = CACHE_DIRECTORY / "token_cache.bin"
+
+EMAIL_LIMIT = 10
+
+REQUEST_TIMEOUT = 30
+
+
+
+==============================================
+FILE: outlook/auth/microsoft_auth.py
+==============================================
+
+import msal
+
+from outlook.config import (
+    CLIENT_ID,
+    AUTHORITY,
+    SCOPES
+)
+
+from outlook.auth.token_manager import create_token_cache
+
+
+class MicrosoftAuthenticationError(Exception):
+    pass
+
+
+class MicrosoftAuth:
+
+    def __init__(self):
+
+        if not CLIENT_ID:
+            raise MicrosoftAuthenticationError(
+                "MICROSOFT_CLIENT_ID is missing. "
+                "Configure your .env file first."
+            )
+
+        self.cache = create_token_cache()
+
+        self.app = msal.PublicClientApplication(
+            client_id=CLIENT_ID,
+            authority=AUTHORITY,
+            token_cache=self.cache
+        )
+
+    def get_accounts(self):
+
+        return self.app.get_accounts()
+
+    def login(self):
+
+        result = self.app.acquire_token_interactive(
+            scopes=SCOPES,
+            prompt="select_account"
+        )
+
+        if "access_token" not in result:
+
+            raise MicrosoftAuthenticationError(
+                result.get(
+                    "error_description",
+                    result.get("error", "Microsoft login failed")
+                )
+            )
+
+        return result
+
+    def get_access_token(self):
+
+        accounts = self.get_accounts()
+
+        if not accounts:
+            return None
+
+        result = self.app.acquire_token_silent(
+            scopes=SCOPES,
+            account=accounts[0]
+        )
+
+        if result and "access_token" in result:
+            return result["access_token"]
+
+        return None
+
+    def logout(self):
+
+        accounts = self.get_accounts()
+
+        for account in accounts:
+            self.app.remove_account(account)
+
+        return True
+
+    def is_authenticated(self):
+
+        return self.get_access_token() is not None
+
+
+
+==============================================
+FILE: outlook/auth/token_manager.py
+==============================================
+
+from msal_extensions import (
+    FilePersistenceWithDataProtection,
+    PersistedTokenCache
+)
+
+from outlook.config import CACHE_DIRECTORY, CACHE_FILE
+
+
+def create_token_cache():
+
+    CACHE_DIRECTORY.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    persistence = FilePersistenceWithDataProtection(
+        str(CACHE_FILE)
+    )
+
+    return PersistedTokenCache(persistence)
+
+
+
+==============================================
+FILE: outlook/services/graph_client.py
+==============================================
+
+import requests
+
+from outlook.config import GRAPH_BASE_URL, REQUEST_TIMEOUT
+
+
+class GraphAPIError(Exception):
+    pass
+
+
+class GraphClient:
+
+    def __init__(self, access_token):
+        self.access_token = access_token
+
+    def get(self, endpoint, params=None):
+
+        url = f"{GRAPH_BASE_URL}/{endpoint.lstrip('/')}"
+
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Accept": "application/json"
+        }
+
+        try:
+            response = requests.get(
+                url,
+                headers=headers,
+                params=params,
+                timeout=REQUEST_TIMEOUT
+            )
+
+            if not response.ok:
+
+                print("\n========== GRAPH API DEBUG ==========")
+                print("Endpoint:", endpoint)
+                print("URL:", response.url)
+                print("HTTP Status:", response.status_code)
+                print("Request ID:", response.headers.get("request-id"))
+                print(
+                    "WWW-Authenticate:",
+                    response.headers.get("WWW-Authenticate")
+                )
+                print(
+                    "Content-Type:",
+                    response.headers.get("Content-Type")
+                )
+                print("Response Headers:", dict(response.headers))
+                print("Response:", response.text[:3000])
+                print("=====================================\n")
+
+                try:
+                    error_data = response.json().get("error", {})
+                    code = error_data.get("code", "Unknown")
+                    message = error_data.get("message", "")
+                except (ValueError, AttributeError):
+                    code = "Unknown"
+                    message = response.text
+
+                raise GraphAPIError(
+                    f"HTTP {response.status_code} | "
+                    f"{code} | {message or response.text[:1000]}"
+                )
+
+            return response.json()
+
+        except requests.exceptions.Timeout:
+            raise GraphAPIError(
+                "Microsoft Graph request timed out."
+            )
+
+        except requests.exceptions.RequestException as error:
+            raise GraphAPIError(
+                f"Network error while connecting to Microsoft Graph: {error}"
+            )
+
+    def get_profile(self):
+
+        return self.get(
+            "me",
+            params={
+                "$select": "id,displayName,mail,userPrincipalName"
+            }
+        )
+
+    def get_recent_emails(self, limit=10):
+
+        return self.get(
+            "me/messages",
+            params={
+                "$top": limit,
+                "$orderby": "receivedDateTime desc",
+                "$select": (
+                    "id,subject,from,receivedDateTime,"
+                    "isRead,bodyPreview,body"
+                )
+            }
+        )
+
+
+
+==============================================
+FILE: outlook/services/email_service.py
+==============================================
+
+from outlook.services.graph_client import GraphClient
+
+
+class EmailService:
+
+    def __init__(self, graph_client: GraphClient):
+        self.graph = graph_client
+
+    def get_latest_emails(self, limit=10):
+
+        response = self.graph.get_recent_emails(limit)
+
+        emails = []
+
+        for item in response.get("value", []):
+
+            sender = (
+                item.get("from", {})
+                .get("emailAddress", {})
+            )
+
+            emails.append({
+                "id": item.get("id"),
+                "subject": item.get("subject") or "(No subject)",
+                "sender_name": sender.get("name"),
+                "sender_email": sender.get("address"),
+                "received_at": item.get("receivedDateTime"),
+                "is_read": item.get("isRead"),
+                "preview": item.get("bodyPreview"),
+                "body": (
+                    item.get("body", {}).get("content", "")
+                ),
+                "body_type": (
+                    item.get("body", {}).get("contentType")
+                )
+            })
+
+        return emails
+
+
+
+==============================================
+FILE: scripts/test_outlook.py
+==============================================
+
+import traceback
+import base64
+import json
+
+from outlook.auth.microsoft_auth import MicrosoftAuth
+from outlook.services.graph_client import GraphClient
+from outlook.services.email_service import EmailService
+
+
+def inspect_token(token):
+    """Display selected JWT claims without revealing the token."""
+
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+
+        claims = json.loads(
+            base64.urlsafe_b64decode(payload)
+        )
+
+        print("\n========== TOKEN DIAGNOSTICS ==========")
+        print("Audience:", claims.get("aud"))
+        print("Granted scopes:", claims.get("scp"))
+        print("Tenant:", claims.get("tid"))
+        print("Issuer:", claims.get("iss"))
+        print("=======================================\n")
+
+    except Exception as error:
+        print("Could not inspect token claims:", repr(error))
+
+
+def main():
+
+    print("\n====================================")
+    print("       GHOST OUTLOOK AGENT")
+    print("====================================\n")
+
+    try:
+        # Step 1: Initialize authentication
+        print("[1] Initializing Microsoft authentication...")
+
+        auth = MicrosoftAuth()
+
+        # Step 2: Check existing authentication
+        print("[2] Checking authentication...")
+
+        token = auth.get_access_token()
+
+        # Step 3: Microsoft login if required
+        if not token:
+
+            print("[3] Opening Microsoft login...")
+
+            result = auth.login()
+
+            if not result or "access_token" not in result:
+                raise Exception(
+                    "Microsoft login did not return an access token."
+                )
+
+            token = result["access_token"]
+
+        print("\n[SUCCESS] Microsoft authentication completed!")
+
+        # Step 4: Inspect token claims
+        print("\n[4] Inspecting token permissions...")
+
+        inspect_token(token)
+
+        # Step 5: Connect Microsoft Graph
+        print("[5] Connecting to Microsoft Graph...")
+
+        graph = GraphClient(token)
+
+        # Step 6: Get Microsoft profile
+        print("\n[6] Loading Outlook profile...")
+
+        profile = graph.get_profile()
+
+        print("\nAccount Information")
+        print("-------------------")
+
+        print("Name:", profile.get("displayName"))
+
+        print(
+            "Email:",
+            profile.get("mail") or profile.get("userPrincipalName")
+        )
+
+        # Step 7: Get latest emails
+        email_service = EmailService(graph)
+
+        print("\n[7] Fetching latest 10 emails...")
+
+        emails = email_service.get_latest_emails(10)
+
+        print("\nLatest Outlook Messages")
+        print("=======================\n")
+
+        if not emails:
+            print("No emails found in this mailbox.")
+
+        for index, email in enumerate(emails, start=1):
+
+            print(f"Email #{index}")
+            print("-" * 50)
+
+            print("Subject:", email.get("subject"))
+            print("From:", email.get("sender_name"))
+            print("Email:", email.get("sender_email"))
+            print("Received:", email.get("received_at"))
+            print("Read:", email.get("is_read"))
+
+            print("\nPreview:")
+            print(email.get("preview") or "No preview available.")
+
+            print("\n")
+
+        print("====================================")
+        print("[SUCCESS] Ghost Outlook is connected!")
+        print("====================================")
+
+    except Exception as error:
+
+        print("\n====================================")
+        print("[ERROR] Ghost Outlook failed!")
+        print("====================================")
+
+        print("Error Type:", type(error).__name__)
+        print("Error Details:", repr(error))
+
+        print("\nFull Error Traceback:")
+        traceback.print_exc()
+
+
+if __name__ == "__main__":
+    main()
+

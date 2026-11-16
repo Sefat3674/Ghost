@@ -16,6 +16,7 @@ checks across the codebase.
 import json
 import secrets
 import threading
+import time
 from enum import IntEnum
 from typing import Any
 
@@ -122,6 +123,10 @@ _ACTION_RISK = {
         "delete": Risk.HIGH,
         None: Risk.LOW,
     },
+    "outlook": {
+        "send_reply": Risk.HIGH,
+        None: Risk.LOW,
+    },
     "task_manager": {
         "kill": Risk.HIGH,
         "end": Risk.HIGH,
@@ -194,7 +199,7 @@ CONFIRM_MESSAGE = (
 # cannot fabricate tokens (they are secrets), and each token is single-use and
 # bound to the exact (tool, sanitized args) fingerprint of the blocked call.
 
-_pending_tokens: dict[str, str] = {}
+_pending_tokens: dict[str, tuple[str, float]] = {}
 _token_lock = threading.Lock()
 _TOKEN_TTL_SECONDS = 600
 
@@ -207,26 +212,36 @@ def _fingerprint(name: str, args: dict | None) -> str:
 
 
 def issue_confirmation_token(name: str, args: dict | None) -> str:
-    """Issue a single-use token authorizing THIS exact call after the user
-    approves. Called only when the gate blocks a HIGH-risk tool."""
+    """Issue a single-use token for this exact call, expiring after the TTL."""
     token = secrets.token_urlsafe(24)
+    fingerprint = _fingerprint(name, args)
+    created_at = time.monotonic()
+
     with _token_lock:
-        _pending_tokens[token] = _fingerprint(name, args)
+        _pending_tokens[token] = (fingerprint, created_at)
+
     return token
 
 
 def redeem_confirmation_token(name: str, args: dict | None, token: str) -> bool:
-    """Validate a token issued for this call and consume it (single use).
-    Returns False if the token is missing, invalid, expired, or bound to a
-    different tool/args — the call stays blocked."""
+    """Validate and consume a matching, unexpired, single-use token."""
     if not token:
         return False
+
     with _token_lock:
-        expected = _pending_tokens.pop(token, None)
-    if expected is None:
+        entry = _pending_tokens.pop(token, None)
+
+    if entry is None:
         return False
-    if expected != _fingerprint(name, args):
+
+    expected_fingerprint, created_at = entry
+
+    if time.monotonic() - created_at > _TOKEN_TTL_SECONDS:
         return False
+
+    if expected_fingerprint != _fingerprint(name, args):
+        return False
+
     return True
 
 

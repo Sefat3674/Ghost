@@ -1,4 +1,4 @@
-"""Multi-key Gemini API rotation.
+﻿"""Multi-key Gemini API rotation.
 
 Reads all configured API keys (legacy `gemini_api_key` + new list
 `gemini_api_keys`) from config/api_keys.json. When a key hits the free-tier
@@ -108,7 +108,7 @@ def next_key() -> str:
             if not entry or entry.get("until", 0) <= now:
                 _pos = (pos + i + 1) % n
                 return k
-        # All keys in cooldown — force a retry on the next one (may have recovered).
+        # All keys in cooldown â€” force a retry on the next one (may have recovered).
         k = keys[pos]
         _pos = (pos + 1) % n
         st.pop(_hash(k), None)
@@ -155,6 +155,19 @@ async def aio_generate(model, contents, config=None, api_version=None):
             kwargs = {}
             if api_version:
                 kwargs["http_options"] = {"api_version": api_version}
+            from google.genai import types
+
+            kwargs["http_options"] = types.HttpOptions(
+                api_version=api_version,
+                timeout=30000,
+                retry_options=types.HttpRetryOptions(
+                    attempts=1,
+                    initial_delay=0.5,
+                    max_delay=2.0,
+                    exp_base=2.0,
+                    jitter=0.2
+                )
+            )
             client = genai.Client(api_key=k, **kwargs)
             resp = await client.aio.models.generate_content(
                 model=model, contents=contents, config=config)
@@ -166,11 +179,11 @@ async def aio_generate(model, contents, config=None, api_version=None):
                 continue
             raise
     if last_err is None:
-        raise KeyError("No Gemini API keys configured — add one in config/api_keys.json")
+        raise KeyError("No Gemini API keys configured â€” add one in config/api_keys.json")
     raise last_err
 
 
-def generate_with_retry(model, contents, config=None, api_version=None):
+def generate_with_retry(model, contents, config=None, api_version=None, timeout_ms=30000):
     """Sync version of aio_generate (for transcribe_voice and legacy modules)."""
     from google import genai
 
@@ -181,6 +194,19 @@ def generate_with_retry(model, contents, config=None, api_version=None):
             kwargs = {}
             if api_version:
                 kwargs["http_options"] = {"api_version": api_version}
+            from google.genai import types
+
+            kwargs["http_options"] = types.HttpOptions(
+                api_version=api_version,
+                timeout=timeout_ms,
+                retry_options=types.HttpRetryOptions(
+                    attempts=1,
+                    initial_delay=0.5,
+                    max_delay=2.0,
+                    exp_base=2.0,
+                    jitter=0.2
+                )
+            )
             client = genai.Client(api_key=k, **kwargs)
             resp = client.models.generate_content(
                 model=model, contents=contents, config=config)
@@ -192,5 +218,8 @@ def generate_with_retry(model, contents, config=None, api_version=None):
                 continue
             raise
     if last_err is None:
-        raise KeyError("No Gemini API keys configured — add one in config/api_keys.json")
+        raise KeyError("No Gemini API keys configured â€” add one in config/api_keys.json")
     raise last_err
+
+
+

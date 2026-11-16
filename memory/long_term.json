@@ -1,9 +1,57 @@
 {
   "identity": {},
-  "preferences": {},
-  "projects": {},
-  "relationships": {},
-  "wishes": {},
+  "preferences": {
+    "favorite_sport": {
+      "value": "Cricket",
+      "updated": "2026-11-16"
+    }
+  },
+  "projects": {
+    "building_project": {
+      "value": "Windows desktop AI assistant named GHOST",
+      "updated": "2026-11-16"
+    },
+    "learning_new_tech_for_project": {
+      "value": "User is learning a new technology to improve their next software project over the next few months",
+      "updated": "2026-11-16"
+    },
+    "project_phoenix_description": {
+      "value": "Building a .NET application to manage personal software projects over the next year.",
+      "updated": "2026-11-16"
+    },
+    "project_phoenix": {
+      "value": "Building a .NET application over the next year",
+      "updated": "2026-11-16"
+    },
+    "full_outlook_system": {
+      "value": "Developing a complete Outlook system",
+      "updated": "2026-11-16"
+    },
+    "project_atlas": {
+      "value": "Developing a .NET application over the next six months",
+      "updated": "2026-11-16"
+    },
+    "projects_at_last": {
+      "value": "A long-term .NET application that the user plans to improve over the next six months",
+      "updated": "2026-11-16"
+    },
+    "dot_net_projects": {
+      "value": "Long-term .NET projects",
+      "updated": "2026-11-16"
+    }
+  },
+  "relationships": {
+    "sifat_ahmed": {
+      "value": "Recipient of the test mail",
+      "updated": "2026-11-16"
+    }
+  },
+  "wishes": {
+    "upcoming_trip": {
+      "value": "Has an upcoming trip for which tickets have not been checked/booked yet",
+      "updated": "2026-11-16"
+    }
+  },
   "notes": {
     "conversation_2026-10-29_15-50": {
       "value": "User: Hello.\nGHOST: Greetings. How can I assist you today?\nUser: lenlen len\nGHOST: I'm not sure I understand. Could you please clarify what you need?\nUser: 이미지 아닌 애들\nGHOST: 어떤 걸 말씀하시는지 좀 더 자세히 알려주실 수 있을까요? 컴퓨터 내의 파일을 말씀하시는 건지, 화면에 보이는 것을 말씀하시는 건지 알려주시면 도와드릴게요.\nUser: mi\nGHOST: 죄송하지만, \"mi\"만으로는 어떤 말씀이신지 알기가 어렵네요. 좀 더 자세히 말씀해 주실 수 있을까요?\nUser: Hello.\nGHOST: Hello. How can I assist you today?\n",
@@ -68,6 +116,26 @@
     "conversation_2026-11-08_16-18": {
       "value": "User: \nGHOST: I have retrieved the general report. Could you please clarify which aspect you'd like to discuss, like OEE enablement or runtime?\nUser: \nGHOST: Regarding performance, 13,994 machines are OEE enabled, representing 22.86 percent. Is there a particular business unit or section you'd like to focus on?\nUser: \nGHOST: There are 7,327 smart machines and 53,829 non-smartable machines. Anythin",
       "updated": "2026-11-08"
+    },
+    "conversation_2026-11-15_18-00": {
+      "value": "User: Hello.\nGHOST: Hello. How can I assist you today?\nUser: আগামীকাল আমাদের কি কি মিটিং আছে?\nGHOST: গুগল অথোরাইজড করা নেই। আমি গুগল অথোরাইজেশন প্রক্রিয়াটি শুরু করছি। লিঙ্কে গিয়ে কোডটি এন্টার করুন। এরপর ক্যালেন্ডার চেক করতে পারব। দুঃখিত, গুগল পরিষেবাটি কনফিগার করা নেই। কনফিগারেশনে 'google_client_id' এবং 'google_client_secret' যোগ করতে হবে।\nUser: हां, तुम क्या मेरा आउटलुक चेक दे सकते हो?\nGHOST: আপন",
+      "updated": "2026-11-15"
+    },
+    "conversation_2026-11-16_09-34": {
+      "value": "User: হ্যাঁ, তুমি কি স্মার্ট ম্যানুফ্যাকচারিং সম্পর্কে কিছু জানো?\nGHOST: হ্যাঁ, আমি স্মার্ট ম্যানুফ্যাকচারিং সিস্টেম সম্পর্কে জানি। আপনি কি কোনো নির্দিষ্ট তথ্য জানতে চান? যেমন মেশিনের অডিট রিপোর্ট বা উৎপাদন সম্পর্কিত কিছু?\nUser: আমি অডিট রিপোর্ট সম্পর্কে জানতে চাচ্ছি।\nGHOST: দুঃখিত, আমি এই মুহূর্তে স্মার্ট ম্যানুফ্যাকচারিং সিস্টেমের অডিট রিপোর্টটি পাচ্ছি না। মনে হচ্ছে সিস্টেমে কোনো যান্ত্রিক সমস্য",
+      "updated": "2026-11-16"
+    },
+    "conversation_2026-11-16_09-38": {
+      "value": "User: हां, कमेंट ही चालू है।\nGHOST: দুঃখিত, আপনার অনুমতি দেওয়ার পরেও mediapipe ইনস্টল করার কমান্ডটি কার্যকর হচ্ছে না। সিস্টেম বারবার অনুমতি চাচ্ছে। এই মুহূর্তে আমি অবজেক্ট ডিটেকশন করতে পারব না। এই সমস্যাটি ঠিক করার জন্য অন্য কোনো পদ্ধতি ব্যবহার করার আগে আমি কি অন্য কোনো কাজে আপনাকে সাহায্য করতে পারি?\nUser: তুমি আউট ফুল আউটলুক সিস্টেম ডেভেলপ করতে আমাকে সাহায্য করবে?\nGHOST: ঠিক আছে, একটি পূর্ণাঙ্গ আ",
+      "updated": "2026-11-16"
+    },
+    "conversation_2026-11-16_09-41": {
+      "value": "User: হ্যাঁ, আমি করতে চাই। তুমি সাইন ইন করো।\nGHOST: আমি আবার বলছি, আমি সরাসরি আপনার আউটলুকে সাইন ইন করতে পারব না। আপনাকে কষ্ট করে আপনার স্ক্রিনের GHOST আউটলুক প্যানেলটি খুঁজে নিয়ে, সেখান থেকে সাইন ইন করতে হবে। আপনি কি প্যানেলটি দেখতে পাচ্ছেন?\nUser: Devaki theek hai ki nahin? Yah 19 ka order hi kiya aapne? Na, panel to dekh pa raha hun lekin tum bhi uss outlook ko open karo. Outlook open karke sign",
+      "updated": "2026-11-16"
+    },
+    "pending_trip_checkup": {
+      "value": "One trip has not had a checkup yet.",
+      "updated": "2026-11-16"
     }
   }
 }

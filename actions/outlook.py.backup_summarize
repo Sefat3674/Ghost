@@ -1,0 +1,247 @@
+﻿from datetime import datetime, timedelta
+
+from outlook.auth.microsoft_auth import MicrosoftAuth
+from outlook.services.graph_client import GraphClient
+from outlook.services.email_service import EmailService
+from outlook.services.folder_service import FolderService
+from outlook.services.calendar_service import CalendarService
+from outlook.services.contact_service import ContactService
+from outlook.services.attachment_service import AttachmentService
+
+
+def _limit(value, default=10, maximum=25):
+    try:
+        return max(1, min(int(value), maximum))
+    except (TypeError, ValueError):
+        return default
+
+
+def _format_sender(item):
+    sender = item.get("from", {}).get("emailAddress", {})
+    name = sender.get("name", "")
+    email = sender.get("address", "")
+    return f"{name} <{email}>" if name else email or "Unknown sender"
+
+
+def outlook_action(parameters, response=None, player=None):
+    """
+    Read-only Outlook integration for Ghost.
+    Supported actions: read, unread, search, folders,
+    calendar, contacts, attachments, profile.
+    """
+
+    parameters = parameters or {}
+    action = str(parameters.get("action", "read")).strip().lower()
+
+    allowed_actions = {
+        "read", "inbox", "unread", "search",
+        "folders", "calendar", "contacts",
+        "attachments", "profile"
+    }
+
+    if action not in allowed_actions:
+        return (
+            f"Outlook action '{action}' is not available. "
+            "This integration currently supports read-only operations."
+        )
+
+    try:
+        auth = MicrosoftAuth()
+        access_token = auth.get_access_token()
+
+        if not access_token:
+            return (
+                "Your Microsoft Outlook session has expired or is not "
+                "connected. Please sign in to Outlook first."
+            )
+
+        graph = GraphClient(access_token)
+
+        emails = EmailService(graph)
+        folders = FolderService(graph)
+        calendar = CalendarService(graph)
+        contacts = ContactService(graph)
+        attachments = AttachmentService(graph)
+
+        limit = _limit(parameters.get("limit", 10))
+        query = str(parameters.get("query", "")).strip()
+
+        # ---------------- EMAIL INBOX ----------------
+        if action in ("read", "inbox"):
+            items = emails.get_latest_emails(limit)
+
+            if not items:
+                return "Your Outlook inbox is empty."
+
+            lines = [f"Latest {len(items)} Outlook emails:"]
+
+            for index, item in enumerate(items, 1):
+                lines.append(
+                    f"{index}. {item['subject']}\n"
+                    f"   From: {_format_sender({'from': {'emailAddress': {'name': item.get('sender_name'), 'address': item.get('sender_email')}}})}\n"
+                    f"   Received: {item.get('received_at', 'Unknown')}\n"
+                    f"   Status: {'Read' if item.get('is_read') else 'Unread'}\n"
+                    f"   Preview: {item.get('preview') or 'No preview'}"
+                )
+
+            return "\n\n".join(lines)
+
+        # ---------------- UNREAD EMAILS ----------------
+        if action == "unread":
+            items = emails.get_unread_emails(limit)
+
+            if not items:
+                return "You have no unread Outlook emails."
+
+            lines = [f"You have {len(items)} unread Outlook emails:"]
+
+            for index, item in enumerate(items, 1):
+                lines.append(
+                    f"{index}. {item['subject']}\n"
+                    f"   From: {item.get('sender_name') or item.get('sender_email')}\n"
+                    f"   Received: {item.get('received_at')}\n"
+                    f"   Preview: {item.get('preview') or 'No preview'}"
+                )
+
+            return "\n\n".join(lines)
+
+        # ---------------- SEARCH EMAILS ----------------
+        if action == "search":
+            if not query:
+                return "Please provide a search keyword for Outlook emails."
+
+            items = emails.search_emails(query, limit)
+
+            if not items:
+                return f"No Outlook emails found for '{query}'."
+
+            lines = [f"Found {len(items)} Outlook emails for '{query}':"]
+
+            for index, item in enumerate(items, 1):
+                lines.append(
+                    f"{index}. {item['subject']}\n"
+                    f"   From: {item.get('sender_name') or item.get('sender_email')}\n"
+                    f"   Received: {item.get('received_at')}\n"
+                    f"   Preview: {item.get('preview') or 'No preview'}"
+                )
+
+            return "\n\n".join(lines)
+
+        # ---------------- MAIL FOLDERS ----------------
+        if action == "folders":
+            items = folders.list_folders()
+
+            if not items:
+                return "No Outlook folders were found."
+
+            lines = ["Your Outlook mail folders:"]
+
+            for item in items:
+                lines.append(
+                    f"- {item.get('displayName', 'Unnamed folder')}: "
+                    f"{item.get('totalItemCount', 0)} emails, "
+                    f"{item.get('unreadItemCount', 0)} unread"
+                )
+
+            return "\n".join(lines)
+
+        # ---------------- CALENDAR ----------------
+        if action == "calendar":
+            start = datetime.now().astimezone()
+            end = start + timedelta(days=7)
+
+            items = calendar.get_events(
+                start.isoformat(),
+                end.isoformat(),
+                limit=limit
+            )
+
+            if not items:
+                return "You have no Outlook calendar events in the next 7 days."
+
+            lines = ["Your upcoming Outlook calendar events:"]
+
+            for index, item in enumerate(items, 1):
+                event_start = item.get("start", {}).get("dateTime", "Unknown")
+                event_end = item.get("end", {}).get("dateTime", "Unknown")
+                location = item.get("location", {}).get("displayName", "")
+
+                lines.append(
+                    f"{index}. {item.get('subject', 'Untitled event')}\n"
+                    f"   Start: {event_start}\n"
+                    f"   End: {event_end}\n"
+                    f"   Location: {location or 'Not specified'}"
+                )
+
+            return "\n\n".join(lines)
+
+        # ---------------- CONTACTS ----------------
+        if action == "contacts":
+            if query:
+                items = contacts.search_contacts(query, limit)
+            else:
+                items = contacts.list_contacts(limit)
+
+            if not items:
+                return "No matching Outlook contacts were found."
+
+            lines = ["Outlook contacts:"]
+
+            for index, item in enumerate(items, 1):
+                addresses = item.get("emailAddresses", [])
+                email = addresses[0].get("address", "") if addresses else ""
+
+                lines.append(
+                    f"{index}. {item.get('displayName', 'Unknown contact')}\n"
+                    f"   Email: {email or 'Not available'}\n"
+                    f"   Phone: {item.get('mobilePhone') or 'Not available'}"
+                )
+
+            return "\n\n".join(lines)
+
+        # ---------------- ATTACHMENTS ----------------
+        if action == "attachments":
+            message_id = str(parameters.get("message_id", "")).strip()
+
+            if not message_id:
+                return (
+                    "Please provide an Outlook message ID to inspect "
+                    "its attachments."
+                )
+
+            items = attachments.list_attachments(message_id)
+
+            if not items:
+                return "This Outlook email has no attachments."
+
+            lines = ["Outlook email attachments:"]
+
+            for item in items:
+                size = item.get("size", 0)
+
+                lines.append(
+                    f"- {item.get('name', 'Unnamed attachment')} "
+                    f"({size} bytes, "
+                    f"{item.get('@odata.type', 'unknown type')})"
+                )
+
+            return "\n".join(lines)
+
+        # ---------------- PROFILE ----------------
+        if action == "profile":
+            profile = graph.get_profile()
+
+            return (
+                "Connected Outlook account:\n"
+                f"Name: {profile.get('displayName', 'Unknown')}\n"
+                f"Email: {profile.get('mail') or profile.get('userPrincipalName', 'Unknown')}"
+            )
+
+    except Exception as error:
+        print(f"[Outlook Action Error] {type(error).__name__}: {error}")
+        return (
+            "I couldn't complete the Outlook request. "
+            f"Error: {type(error).__name__}: {error}"
+        )
+
+    return "Outlook request completed."

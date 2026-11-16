@@ -235,7 +235,7 @@ def extract_memory(user_text: str, assistant_text: str, api_key: str) -> dict:
         )
 
         resp = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model="gemini-3.5-flash-lite",
             contents=prompt,
         )
         raw = (resp.text or "").strip()
