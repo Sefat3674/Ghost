@@ -1,0 +1,3 @@
+
+--- outlook_auth_status ---
+Check authentication status. Run `outlook-mcp auth` on the host if needed.

@@ -1455,6 +1455,35 @@ TOOL_DECLARATIONS = [
             "required": []
         }
     },
+    {
+        "name": "personal_outlook",
+        "description": (
+            "Personal Microsoft Outlook through Outlook MCP, separate from "
+            "the existing Work/School Outlook integration. Use list_tools "
+            "to discover exact tool names and schemas. Use call with the "
+            "exact tool_name and arguments. All mutations and unknown "
+            "operations require explicit user approval."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "enum": ["list_tools", "call"]
+                },
+                "tool_name": {
+                    "type": "STRING",
+                    "description": "Exact MCP tool name."
+                },
+                "arguments": {
+                    "type": "OBJECT",
+                    "description": "Arguments matching the discovered MCP schema."
+                }
+            },
+            "required": ["action"]
+        }
+    }
+
 ]
 
 # â”€â”€ Safety: inject a `confirm` flag into every tool that may be HIGH risk â”€â”€â”€â”€
@@ -1467,7 +1496,7 @@ for _decl in TOOL_DECLARATIONS:
         "task_manager", "code_helper", "game_updater",
         "computer_settings", "computer_control", "calendar", "drive",
         "smart_home_control", "browser_control", "send_message", "autostart",
-        "outlook",
+        "outlook", "personal_outlook",
     }:
         _decl.setdefault("parameters", {}).setdefault("properties", {})[
             "confirm"
@@ -2189,6 +2218,7 @@ class GHOSTLive:
             "set_voice":         (_set_voice, 10),
             "set_mood":          (_set_mood, 10),
             "outlook":           (_lazy("actions.outlook", "outlook_action", response=None, player=ui), 60),
+            "personal_outlook":  (_lazy("integrations.personal_outlook_mcp", "personal_outlook_action"), 180),
             "gmail":             (_lazy("actions.gmail", "gmail_action", response=None, player=ui), 60),
             "read_pdf":          (_lazy("actions.pdf_reader", "read_pdf", response=None, player=ui), 60),
             "pdf_qa":            (_lazy("actions.pdf_reader", "pdf_qa", response=None, player=ui), 90),

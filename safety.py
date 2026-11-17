@@ -94,7 +94,80 @@ TOOL_RISK = {
     "drive":             Risk.MEDIUM,
 }
 
+# Personal Outlook MCP tools: explicit risk classification.
+# All unlisted personal Outlook operations default to HIGH.
+PERSONAL_OUTLOOK_READ_ONLY = {
+    "outlook_auth_status",
+    "outlook_list_inbox",
+    "outlook_read_message",
+    "outlook_read_messages",
+    "outlook_search_mail",
+    "outlook_list_folders",
+    "outlook_list_inbox_delta",
+    "outlook_list_events",
+    "outlook_get_event",
+    "outlook_find_event_by_key",
+    "outlook_list_events_delta",
+    "outlook_list_contacts",
+    "outlook_search_contacts",
+    "outlook_get_contact",
+    "outlook_list_task_lists",
+    "outlook_list_tasks",
+    "outlook_get_task",
+    "outlook_list_task_attachments",
+    "outlook_list_drafts",
+    "outlook_list_attachments",
+    "outlook_list_thread",
+    "outlook_whoami",
+    "outlook_list_calendars",
+    "outlook_list_categories",
+    "outlook_get_mail_tips",
+    "outlook_list_inbox_overrides",
+}
 
+PERSONAL_OUTLOOK_HIGH_RISK = {
+    "outlook_send_message",
+    "outlook_reply",
+    "outlook_forward",
+    "outlook_move_message",
+    "outlook_delete_message",
+    "outlook_copy_message",
+    "outlook_categorize_message",
+    "outlook_reclassify_message",
+    "outlook_flag_message",
+    "outlook_mark_read",
+    "outlook_set_inbox_override",
+    "outlook_delete_inbox_override",
+    "outlook_create_event",
+    "outlook_update_event",
+    "outlook_delete_event",
+    "outlook_rsvp",
+    "outlook_attach_to_event",
+    "outlook_remove_event_attachment",
+    "outlook_create_contact",
+    "outlook_update_contact",
+    "outlook_delete_contact",
+    "outlook_create_task",
+    "outlook_update_task",
+    "outlook_complete_task",
+    "outlook_delete_task",
+    "outlook_add_checklist_item",
+    "outlook_update_checklist_item",
+    "outlook_delete_checklist_item",
+    "outlook_upload_task_attachment",
+    "outlook_delete_task_attachment",
+    "outlook_create_draft",
+    "outlook_update_draft",
+    "outlook_send_draft",
+    "outlook_delete_draft",
+    "outlook_send_with_attachments",
+    "outlook_attach_to_draft",
+    "outlook_remove_draft_attachment",
+    "outlook_create_folder",
+    "outlook_rename_folder",
+    "outlook_delete_folder",
+    "outlook_batch_triage",
+}
 # ── Action-specific risk overrides ────────────────────────────────────────────
 # (tool_name, action) -> Risk. High-impact / irreversible actions are HIGH.
 # `None` as the action key means "any other action" for that tool.
@@ -249,14 +322,35 @@ def redeem_confirmation_token(name: str, args: dict | None, token: str) -> bool:
 
 
 def classify(name: str, args: dict | None) -> Risk:
-    """Return the risk level for a concrete tool call (name + args)."""
+    """Return risk level for a concrete tool call."""
     args = args or {}
+
+    if name == "personal_outlook":
+        action = str(args.get("action", "")).lower().strip()
+
+        if action == "list_tools":
+            return Risk.LOW
+
+        if action == "call":
+            tool_name = str(args.get("tool_name", "")).strip()
+
+            if tool_name in PERSONAL_OUTLOOK_READ_ONLY:
+                return Risk.LOW
+
+            # Mutations, downloads, and unknown tools fail closed.
+            return Risk.HIGH
+
+        # Unknown bridge actions also fail closed.
+        return Risk.HIGH
+
     action = str(args.get("action", "")).lower().strip()
     overrides = _ACTION_RISK.get(name)
+
     if overrides is not None:
         risk = overrides.get(action, overrides.get(None))
         if risk is not None:
             return risk
+
     return TOOL_RISK.get(name, Risk.MEDIUM)
 
 
@@ -279,6 +373,10 @@ def describe(name: str, args: dict | None) -> str:
     """Short human-readable description of what an action will do."""
     args = args or {}
     action = str(args.get("action", "")).lower().strip()
+
+    if name == "personal_outlook":
+        tool_name = str(args.get("tool_name", "unknown Outlook operation"))
+        return f"perform Personal Outlook operation: {tool_name}"
 
     if name == "file_controller":
         target = args.get("name") or args.get("path") or "item"

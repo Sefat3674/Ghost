@@ -152,6 +152,14 @@
     "conversation_2026-11-16_15-40": {
       "value": "User: \nGHOST: I have previewed moving the urgent project review email to Ghost_Test_Folder_Renamed; one matching email was found. No emails have been moved yet.\nUser: \nGHOST: Correct. That is the single email matching your criteria.\nUser: \nGHOST: Yes, `Ghost_Test_Folder_Renamed` is identified as the correct destination for the move.\nUser: \nGHOST: I believe there may be a misunderstanding. I need *",
       "updated": "2026-11-16"
+    },
+    "conversation_2026-11-17_15-27": {
+      "value": "User: Check my personal outlook authenticity status.\nGHOST: Your personal Outlook account is authenticated, with read-only access.\nUser: Show me my latest five emails from my personal Outlook email.\nGHOST: \nUser: Hello.\nGHOST: হ্যালো, আপনাকে কীভাবে সাহায্য করতে পারি?\nUser: Show me my latest emails from my personal Outlook.\nGHOST: Here is your latest read email from your personal Outlook: Subject: ",
+      "updated": "2026-11-17"
+    },
+    "conversation_2026-11-17_15-31": {
+      "value": "User: তো ঘোস্ট টেস্ট ফোল্ডারে যে মেইলগুলা আছে, ওগুলা একটু বলো না।\nGHOST: একটু অপেক্ষা করুন, আমি \"Ghost_Test_Folder_Renamed\" ফোল্ডারের মেইলগুলো দেখছি। Ghost_Test_Folder_Renamed ফোল্ডারের মেইলগুলো দেখার জন্য সঠিক কমান্ডটি আমার কাছে নেই। আমি কি এর বদলে মেইলগুলো খোঁজার চেষ্টা করব?\nUser: Tamil galu fujo\nGHOST: দুঃখিত, আমি এই মুহূর্তে ওই ফোল্ডারের মেইলগুলো সরাসরি খুঁজে পাচ্ছি না। অন্য কোনোভাবে কি চেষ্টা",
+      "updated": "2026-11-17"
     }
   }
 }
