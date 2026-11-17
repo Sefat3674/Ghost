@@ -294,6 +294,16 @@ def issue_confirmation_token(name: str, args: dict | None) -> str:
     created_at = time.monotonic()
 
     with _token_lock:
+        # Remove expired tokens so abandoned confirmations cannot accumulate.
+        expired_tokens = [
+            pending_token
+            for pending_token, (_, issued_at) in _pending_tokens.items()
+            if created_at - issued_at > _TOKEN_TTL_SECONDS
+        ]
+
+        for expired_token in expired_tokens:
+            _pending_tokens.pop(expired_token, None)
+
         _pending_tokens[token] = (fingerprint, created_at)
 
     return token
@@ -329,6 +339,9 @@ def classify(name: str, args: dict | None) -> Risk:
         action = str(args.get("action", "")).lower().strip()
 
         if action == "list_tools":
+            return Risk.LOW
+
+        if action == "preview_move":
             return Risk.LOW
 
         if action == "call":
@@ -375,6 +388,9 @@ def describe(name: str, args: dict | None) -> str:
     action = str(args.get("action", "")).lower().strip()
 
     if name == "personal_outlook":
+        action = str(args.get("action", "")).lower().strip()
+        if action == "preview_move":
+            return "prepare a read-only Personal Outlook move preview"
         tool_name = str(args.get("tool_name", "unknown Outlook operation"))
         return f"perform Personal Outlook operation: {tool_name}"
 

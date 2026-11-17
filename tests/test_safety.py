@@ -19,6 +19,27 @@ class RiskClassificationTest(unittest.TestCase):
         self.assertEqual(safety.classify("web_search", {}), safety.Risk.LOW)
         self.assertEqual(safety.classify("system_status", {}), safety.Risk.LOW)
 
+    def test_personal_outlook_preview_move_is_low(self):
+        self.assertEqual(
+            safety.classify(
+                "personal_outlook",
+                {"action": "preview_move"},
+            ),
+            safety.Risk.LOW,
+        )
+
+    def test_personal_outlook_mutation_stays_high(self):
+        self.assertEqual(
+            safety.classify(
+                "personal_outlook",
+                {
+                    "action": "call",
+                    "tool_name": "outlook_move_message",
+                },
+            ),
+            safety.Risk.HIGH,
+        )
+
     def test_file_delete_is_high(self):
         self.assertEqual(
             safety.classify("file_controller", {"action": "delete", "name": "x.txt"}),

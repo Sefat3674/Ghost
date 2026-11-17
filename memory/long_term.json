@@ -1,5 +1,10 @@
 {
-  "identity": {},
+  "identity": {
+    "name": {
+      "value": "Sefat Ahmed",
+      "updated": "2026-11-17"
+    }
+  },
   "preferences": {
     "favorite_sport": {
       "value": "Cricket",
@@ -159,6 +164,10 @@
     },
     "conversation_2026-11-17_15-31": {
       "value": "User: তো ঘোস্ট টেস্ট ফোল্ডারে যে মেইলগুলা আছে, ওগুলা একটু বলো না।\nGHOST: একটু অপেক্ষা করুন, আমি \"Ghost_Test_Folder_Renamed\" ফোল্ডারের মেইলগুলো দেখছি। Ghost_Test_Folder_Renamed ফোল্ডারের মেইলগুলো দেখার জন্য সঠিক কমান্ডটি আমার কাছে নেই। আমি কি এর বদলে মেইলগুলো খোঁজার চেষ্টা করব?\nUser: Tamil galu fujo\nGHOST: দুঃখিত, আমি এই মুহূর্তে ওই ফোল্ডারের মেইলগুলো সরাসরি খুঁজে পাচ্ছি না। অন্য কোনোভাবে কি চেষ্টা",
+      "updated": "2026-11-17"
+    },
+    "conversation_2026-11-17_17-04": {
+      "value": "User: \nGHOST: I've gathered messages from your Inbox and Ghost_Test_Folder_Renamed, consolidated, sorted by newest, and displayed the latest three. Here are the results: Folder: Inbox, Subject: URGENT: Project Review Required – Deadline Test, Sender: sefat ahmed akkhor (sefatahmed3674@gmail.com), Received: 2026-11-16 04:21:31 UTC; Folder: Ghost_Test_Folder_Renamed, Subject: Test 1, Sender: sefat a",
       "updated": "2026-11-17"
     }
   }

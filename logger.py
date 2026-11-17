@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -79,7 +79,7 @@ def setup_logger(base_dir) -> Path:
     sys.stderr = _Tee(_PRIMARY_ERR, _LOGFILE)
 
     log("=" * 60)
-    log(f"GHOST started — log file: {log_file}")
+    log(f"GHOST started â€” log file: {log_file}")
     log(f"Python {sys.version.split()[0]} | running from {Path(base_dir)}")
     log("=" * 60)
     return log_file
@@ -103,7 +103,7 @@ def log_tool(name, args, result=None, error=None):
     if error is not None:
         line += f"  => ERROR: {error}"
     elif result is not None:
-        line += f"  => {str(result)[:200]}"
+        line += f"  => {str(result)[:2000]}"
     log(line, level="INFO")
 
 
