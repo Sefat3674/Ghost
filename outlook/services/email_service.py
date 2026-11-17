@@ -1,4 +1,4 @@
-﻿from outlook.services.graph_client import GraphClient
+from outlook.services.graph_client import GraphClient
 
 
 class EmailService:
@@ -11,6 +11,14 @@ class EmailService:
 
         return {
             "id": item.get("id"),
+            "conversation_id": item.get("conversationId"),
+            "parent_folder_id": item.get("parentFolderId"),
+            "sent_at": item.get("sentDateTime"),
+            "to_recipients": [
+                recipient.get("emailAddress", {}).get("address")
+                for recipient in item.get("toRecipients", [])
+                if recipient.get("emailAddress", {}).get("address")
+            ],
             "subject": item.get("subject") or "(No subject)",
             "sender_name": sender.get("name"),
             "sender_email": sender.get("address"),
@@ -22,6 +30,14 @@ class EmailService:
             "body_type": item.get("body", {}).get("contentType"),
             "has_attachments": item.get("hasAttachments", False)
         }
+
+
+    def get_recent_sent_emails(self, limit=20):
+        response = self.graph.get_recent_sent_emails(limit)
+        return [
+            self._format_email(item)
+            for item in response.get("value", [])
+        ]
 
     def get_latest_emails(self, limit=10):
         response = self.graph.get_recent_emails(limit)
@@ -64,7 +80,7 @@ class EmailService:
                 "$top": limit,
                 "$select": (
                     "id,subject,from,receivedDateTime,"
-                    "isRead,bodyPreview"
+                    "isRead,bodyPreview,parentFolderId"
                 )
             },
             extra_headers={"ConsistencyLevel": "eventual"}
@@ -104,6 +120,18 @@ class EmailService:
         return self.graph.post(
             f"me/messages/{message_id}/move",
             {"destinationId": "archive"}
+        )
+
+    def move_email(self, message_id, destination_folder_id):
+        if not message_id or not str(message_id).strip():
+            raise ValueError("Message ID is required.")
+
+        if not destination_folder_id or not str(destination_folder_id).strip():
+            raise ValueError("Destination folder ID is required.")
+
+        return self.graph.post(
+            f"me/messages/{message_id}/move",
+            {"destinationId": destination_folder_id}
         )
 
     def send_email(self, to, subject, body, cc=None, bcc=None):

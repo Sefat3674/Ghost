@@ -125,6 +125,9 @@ _ACTION_RISK = {
     },
     "outlook": {
         "send_reply": Risk.HIGH,
+        "move_email": Risk.HIGH,
+        "bulk_organize": Risk.HIGH,
+        "delete_folder": Risk.HIGH,
         None: Risk.LOW,
     },
     "task_manager": {

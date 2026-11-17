@@ -57,18 +57,18 @@ THINKING_LEVEL      = "low"  # Gemini 3.1 thinking depth: minimal | low | medium
 TG_MODEL            = "gemini-2.5-flash"
 
 TG_HELP_TEXT = (
-    "🤖 <b>GHOST — Telegram remote control</b>\n"
+    "ðŸ¤– <b>GHOST â€” Telegram remote control</b>\n"
     "Yozing, men bajaraman. Misollar:\n"
-    "• <code>notepadni och</code>\n"
-    "• <code>Toshkent ob-havosi</code>\n"
-    "• <code>CPU qancha</code>\n"
-    "• <code>menga eslatma qo'y 10 daqiqadan keyin</code>\n"
-    "• <code>clipboard'ni ko'rsat</code>\n"
-    "• <code>yangi email bormi</code> / <code>email yubor ...</code>\n"
-    "• <code>kalendarimni ko'rsat</code> / <code>ertaga 15:00 da uchrashuv qo'y</code>\n"
-    "• <code>google_auth</code> (Google ulash) / <code>google tekshir</code>\n\n"
-    "🎤 Ovozli xabar yuborsangiz ham tushunaman.\n"
-    "⚡ Tezkor tugmalar va <code>/status</code>, <code>/mute</code>, "
+    "â€¢ <code>notepadni och</code>\n"
+    "â€¢ <code>Toshkent ob-havosi</code>\n"
+    "â€¢ <code>CPU qancha</code>\n"
+    "â€¢ <code>menga eslatma qo'y 10 daqiqadan keyin</code>\n"
+    "â€¢ <code>clipboard'ni ko'rsat</code>\n"
+    "â€¢ <code>yangi email bormi</code> / <code>email yubor ...</code>\n"
+    "â€¢ <code>kalendarimni ko'rsat</code> / <code>ertaga 15:00 da uchrashuv qo'y</code>\n"
+    "â€¢ <code>google_auth</code> (Google ulash) / <code>google tekshir</code>\n\n"
+    "ðŸŽ¤ Ovozli xabar yuborsangiz ham tushunaman.\n"
+    "âš¡ Tezkor tugmalar va <code>/status</code>, <code>/mute</code>, "
     "<code>/unmute</code>, <code>/mode</code>, <code>/voice</code>, "
     "<code>/screenshot</code>, <code>/help</code>."
 )
@@ -76,17 +76,17 @@ TG_HELP_TEXT = (
 TG_QUICK_KEYBOARD = {
     "inline_keyboard": [
         [
-            {"text": "🔍 Status", "callback_data": "/status"},
-            {"text": "🔇 Mute",  "callback_data": "/mute"},
-            {"text": "🔊 Unmute", "callback_data": "/unmute"},
+            {"text": "ðŸ” Status", "callback_data": "/status"},
+            {"text": "ðŸ”‡ Mute",  "callback_data": "/mute"},
+            {"text": "ðŸ”Š Unmute", "callback_data": "/unmute"},
         ],
         [
-            {"text": "🧭 Mode", "callback_data": "/mode"},
-            {"text": "🗣 Voice", "callback_data": "/voice"},
+            {"text": "ðŸ§­ Mode", "callback_data": "/mode"},
+            {"text": "ðŸ—£ Voice", "callback_data": "/voice"},
         ],
         [
-            {"text": "📸 Screenshot", "callback_data": "/screenshot"},
-            {"text": "❓ Help", "callback_data": "/help"},
+            {"text": "ðŸ“¸ Screenshot", "callback_data": "/screenshot"},
+            {"text": "â“ Help", "callback_data": "/help"},
         ],
     ]
 }
@@ -94,16 +94,16 @@ TG_QUICK_KEYBOARD = {
 TG_MODE_KEYBOARD = {
     "inline_keyboard": [
         [
-            {"text": "😐 Normal",   "callback_data": "/mode normal"},
-            {"text": "💕 Girlfriend", "callback_data": "/mode girlfriend"},
+            {"text": "ðŸ˜ Normal",   "callback_data": "/mode normal"},
+            {"text": "ðŸ’• Girlfriend", "callback_data": "/mode girlfriend"},
         ],
         [
-            {"text": "🤪 Crazy Friend", "callback_data": "/mode crazy_friend"},
-            {"text": "🎩 Butler",       "callback_data": "/mode butler"},
+            {"text": "ðŸ¤ª Crazy Friend", "callback_data": "/mode crazy_friend"},
+            {"text": "ðŸŽ© Butler",       "callback_data": "/mode butler"},
         ],
         [
-            {"text": "🤝 Friend",  "callback_data": "/mode friend"},
-            {"text": "😎 Casual",  "callback_data": "/mode casual"},
+            {"text": "ðŸ¤ Friend",  "callback_data": "/mode friend"},
+            {"text": "ðŸ˜Ž Casual",  "callback_data": "/mode casual"},
         ],
     ]
 }
@@ -211,7 +211,7 @@ VOICE_NAMES = list(VOICES.keys())
 TG_VOICE_KEYBOARD = {
     "inline_keyboard": [
         [
-            {"text": f"🎙 {name}", "callback_data": f"/voice {name}"}
+            {"text": f"ðŸŽ™ {name}", "callback_data": f"/voice {name}"}
             for name in VOICE_NAMES[i:i + 2]
         ]
         for i in range(0, len(VOICE_NAMES), 2)
@@ -287,11 +287,11 @@ def _load_system_prompt() -> str:
         return (
             "You are GHOST, a sharp and efficient AI assistant. "
             "Be concise, direct, and always use the provided tools to complete tasks. "
-            "Never simulate or guess results — always call the appropriate tool."
+            "Never simulate or guess results â€” always call the appropriate tool."
         )
 
 
-# ── Hafıza ────────────────────────────────────────────────────────────────────
+# â”€â”€ HafÄ±za â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 _last_memory_input = ""
 _memory_lock       = threading.Lock()
 _memory_running    = False
@@ -346,14 +346,14 @@ def _update_memory_async(user_text: str, assistant_text: str) -> None:
             _memory_running = False
 
 
-# ── Tool declarations ─────────────────────────────────────────────────────────
+# â”€â”€ Tool declarations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 TOOL_DECLARATIONS = [
     {
         "name": "open_app",
         "description": (
             "Opens any application on the Windows computer. "
             "Use this whenever the user asks to open, launch, or start any app, "
-            "website, or program. Always call this tool — never just say you opened it."
+            "website, or program. Always call this tool â€” never just say you opened it."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -442,7 +442,7 @@ TOOL_DECLARATIONS = [
             "as text. MUST be called when user asks what is on screen, what you see, "
             "analyze my screen, look at camera, etc. You have NO visual ability without "
             "this tool. After it returns, speak the result naturally. "
-            "No other vision channel exists — this is the only way to see."
+            "No other vision channel exists â€” this is the only way to see."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -592,7 +592,7 @@ TOOL_DECLARATIONS = [
         "description": (
             "Executes complex multi-step tasks requiring multiple different tools. "
             "Examples: 'research X and save to file', 'find and organize files'. "
-            "DO NOT use for single commands. NEVER use for Steam/Epic — use game_updater."
+            "DO NOT use for single commands. NEVER use for Steam/Epic â€” use game_updater."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -754,7 +754,7 @@ TOOL_DECLARATIONS = [
             "Call this silently whenever the user reveals something worth remembering: "
             "name, age, city, job, preferences, hobbies, relationships, projects, or future plans. "
             "Do NOT call for: weather, reminders, searches, or one-time commands. "
-            "Do NOT announce that you are saving — just call it silently. "
+            "Do NOT announce that you are saving â€” just call it silently. "
             "Values must be in English regardless of the conversation language."
         ),
         "parameters": {
@@ -763,12 +763,12 @@ TOOL_DECLARATIONS = [
                 "category": {
                     "type": "STRING",
                     "description": (
-                        "identity — name, age, birthday, city, job, language, nationality | "
-                        "preferences — favorite food/color/music/film/game/sport, hobbies | "
-                        "projects — active projects, goals, things being built | "
-                        "relationships — friends, family, partner, colleagues | "
-                        "wishes — future plans, things to buy, travel dreams | "
-                        "notes — habits, schedule, anything else worth remembering"
+                        "identity â€” name, age, birthday, city, job, language, nationality | "
+                        "preferences â€” favorite food/color/music/film/game/sport, hobbies | "
+                        "projects â€” active projects, goals, things being built | "
+                        "relationships â€” friends, family, partner, colleagues | "
+                        "wishes â€” future plans, things to buy, travel dreams | "
+                        "notes â€” habits, schedule, anything else worth remembering"
                     )
                 },
                 "key":   {"type": "STRING", "description": "Short snake_case key (e.g. name, favorite_food, sister_name)"},
@@ -1030,23 +1030,26 @@ TOOL_DECLARATIONS = [
     {
         "name": "outlook",
         "description": (
-            "Microsoft Outlook assistant for Ghost. Use this tool for "
-            "reading inbox emails, unread messages, searching emails, "
-            "reading complete emails, listing folders, viewing calendar "
-            "events, contacts, attachments, checking the Outlook profile, "
-            "and AI-powered email summarization. "
-            "Can also generate professional email replies using Gemini "
-            "in English or Bangla. "
-            "Reply workflow: draft_reply generates a draft only; "
-            "show_draft displays the pending draft; "
-            "revise_reply revises it; "
-            "send_reply sends it only after the user explicitly confirms "
-            "sending the displayed draft. "
-            "NEVER send an email merely because a draft was generated. "
-            "NEVER assume confirmation. "
-            "Actions: read, inbox, unread, search, read_email, folders, "
-            "calendar, contacts, attachments, profile, summarize, "
-            "draft_reply, show_draft, revise_reply, send_reply."
+            "Complete Microsoft Outlook assistant for Ghost. "
+            "Supports inbox reading, unread emails, searching, reading "
+            "individual emails, folders, folder creation, renaming, "
+            "deletion, individual email moves, bulk email organization "
+            "by sender or subject, calendar, contacts, attachments, "
+            "profile, summarization, and inbox intelligence. "
+            "Supports professional English and Bangla replies, including "
+            "consolidated grouped replies. "
+            "IMPORTANT SAFETY: preview_bulk_organize is read-only. "
+            "move_email, bulk_organize, and delete_folder require "
+            "confirm=True after explicit user approval. "
+            "bulk_organize accepts at most 25 message IDs. "
+            "draft_reply and draft_grouped_reply only create drafts. "
+            "send_reply requires explicit approval of the displayed "
+            "draft and its exact draft hash. Never assume confirmation. "
+            "Actions: read, inbox, unread, search, read_email, move_email, "
+            "preview_bulk_organize, bulk_organize, folders, create_folder, "
+            "rename_folder, delete_folder, read_folder, calendar, contacts, "
+            "attachments, profile, summarize, intelligence, draft_reply, "
+            "draft_grouped_reply, show_draft, revise_reply, send_reply."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -1055,8 +1058,11 @@ TOOL_DECLARATIONS = [
                     "type": "STRING",
                     "description": (
                         "read | inbox | unread | search | read_email | "
-                        "folders | calendar | contacts | attachments | "
-                        "profile | summarize | draft_reply | show_draft | "
+                        "move_email | preview_bulk_organize | bulk_organize | "
+                        "folders | create_folder | rename_folder | "
+                        "delete_folder | read_folder | calendar | contacts | "
+                        "attachments | profile | summarize | intelligence | "
+                        "draft_reply | draft_grouped_reply | show_draft | "
                         "revise_reply | send_reply"
                     )
                 },
@@ -1066,14 +1072,16 @@ TOOL_DECLARATIONS = [
                 },
                 "limit": {
                     "type": "INTEGER",
-                    "description": "Maximum results (default 10, maximum 25)."
+                    "description": "Maximum results, default 10, maximum 25."
                 },
                 "message_id": {
                     "type": "STRING",
-                    "description": (
-                        "Outlook message ID. Required to read an email "
-                        "or generate its reply."
-                    )
+                    "description": "Outlook message ID for reading, moving, or drafting a reply."
+                },
+                "message_ids": {
+                    "type": "ARRAY",
+                    "items": {"type": "STRING"},
+                    "description": "Explicit Outlook message IDs for bulk_organize. Maximum 25."
                 },
                 "language": {
                     "type": "STRING",
@@ -1081,37 +1089,69 @@ TOOL_DECLARATIONS = [
                 },
                 "instruction": {
                     "type": "STRING",
-                    "description": (
-                        "Instructions for revising a pending reply, "
-                        "such as make it shorter or more professional."
-                    )
+                    "description": "Instructions for revising a pending reply."
                 },
                 "draft_id": {
                     "type": "STRING",
-                    "description": (
-                        "ID of the pending reply draft to display, revise, "
-                        "or send."
-                    )
+                    "description": "Pending reply draft ID for display, revision, or sending."
                 },
                 "draft_hash": {
-    "type": "STRING",
-    "description": (
-        "Exact draft hash returned by show_draft. Required "
-        "when sending a reply."
-    )
-},
+                    "type": "STRING",
+                    "description": "Exact draft hash returned by show_draft; required when sending."
+                },
                 "confirm": {
-    "type": "BOOLEAN",
-    "description": (
-        "Set true only after the user explicitly approves "
-        "the exact Outlook reply being sent."
-    )
-}
+                    "type": "BOOLEAN",
+                    "description": (
+                        "Explicit user approval for the exact operation. "
+                        "Required for moving emails, bulk moves, folder deletion, "
+                        "and sending an approved displayed reply."
+                    )
+                },
+                "organize_by": {
+                    "type": "STRING",
+                    "description": "Bulk preview grouping: sender or subject."
+                },
+                "value": {
+                    "type": "STRING",
+                    "description": "Sender email/name or subject keyword for bulk organization."
+                },
+                "destination_folder": {
+                    "type": "STRING",
+                    "description": "Destination Outlook folder name."
+                },
+                "destination_folder_id": {
+                    "type": "STRING",
+                    "description": "Destination Outlook folder ID for move_email."
+                },
+                "name": {
+                    "type": "STRING",
+                    "description": "New folder name for create_folder."
+                },
+                "folder_id": {
+                    "type": "STRING",
+                    "description": "Outlook folder ID for rename, delete, or read."
+                },
+                "new_name": {
+                    "type": "STRING",
+                    "description": "New folder name for rename_folder."
+                },
+                "required_actions": {
+                    "type": "ARRAY",
+                    "items": {"type": "STRING"},
+                    "description": "Required tasks to address in one consolidated reply."
+                },
+                "deadline": {
+                    "type": "STRING",
+                    "description": "Optional deadline to include in a grouped reply."
+                },
+                "local_only": {
+                    "type": "BOOLEAN",
+                    "description": "Use the local grouped-reply generator instead of Gemini."
+                }
             },
             "required": []
         }
     },
-
 
 
     {
@@ -1227,7 +1267,7 @@ TOOL_DECLARATIONS = [
         "name": "pc_health",
         "description": (
             "PC Health Guardian: automatic proactive alerts for battery, disk "
-            "space, RAM, CPU, temperature and backup reminders — works out of "
+            "space, RAM, CPU, temperature and backup reminders â€” works out of "
             "the box with smart defaults, no setup needed. "
             "Actions: status | report | enable | disable | check | backup | "
             "set | reset. Use for 'pc health report', 'how is my battery', "
@@ -1417,7 +1457,7 @@ TOOL_DECLARATIONS = [
     },
 ]
 
-# ── Safety: inject a `confirm` flag into every tool that may be HIGH risk ────
+# â”€â”€ Safety: inject a `confirm` flag into every tool that may be HIGH risk â”€â”€â”€â”€
 # The model can pass confirm=true only after the user explicitly approves. The
 # gate in _execute_tool/_dispatch_tool enforces this centrally (see safety.py).
 for _decl in TOOL_DECLARATIONS:
@@ -1427,6 +1467,7 @@ for _decl in TOOL_DECLARATIONS:
         "task_manager", "code_helper", "game_updater",
         "computer_settings", "computer_control", "calendar", "drive",
         "smart_home_control", "browser_control", "send_message", "autostart",
+        "outlook",
     }:
         _decl.setdefault("parameters", {}).setdefault("properties", {})[
             "confirm"
@@ -1587,6 +1628,7 @@ class GHOSTLive:
         self._awaiting_human_confirmation = False
         self._pending_human_fingerprint = None
         self._approved_human_fingerprint = None
+        self._pending_confirmation_token = None
         self.loop_guard     = LoopGuard()
         from actions.akkhor.service import AkkhorService
         self.akkhor_service = AkkhorService(BASE_DIR)
@@ -1625,16 +1667,16 @@ class GHOSTLive:
             pass
 
     def _on_wake_detect(self):
-        """Excited when the wake word is heard — un-mute and listen (barge-in)."""
+        """Excited when the wake word is heard â€” un-mute and listen (barge-in)."""
         try:
             if not self._ready or not self.session:
-                print("[WakeWord] ⚠️ Ignored — session not ready.")
+                print("[WakeWord] âš ï¸ Ignored â€” session not ready.")
                 return
             self.ui.muted = False
             self.set_speaking(False)
-            self.ui.write_log("SYS: Wake word heard — listening.")
+            self.ui.write_log("SYS: Wake word heard â€” listening.")
         except Exception as e:
-            print(f"[WakeWord] ⚠️ {e}")
+            print(f"[WakeWord] âš ï¸ {e}")
 
     def attach_tray(self):
         """Background tray icon + global hotkeys (optional deps)."""
@@ -1654,7 +1696,7 @@ class GHOSTLive:
                     from actions.ghost_wake import _matcher as kw_matcher
                     name, eng = _pick_engine()
                     if not eng.available:
-                        print("[Tray] ⚠️ Wake word engine not ready:", name)
+                        print("[Tray] âš ï¸ Wake word engine not ready:", name)
                         return
                     if eng._running:
                         r = eng.stop()
@@ -1664,7 +1706,7 @@ class GHOSTLive:
                     print(f"[Tray] {r}")
                     self.ui.write_log(f"SYS: {r}")
                 except Exception as e:
-                    print(f"[Tray] ⚠️ {e}")
+                    print(f"[Tray] âš ï¸ {e}")
 
             def _hide_show():
                 state = self.ui.root.state()
@@ -1698,24 +1740,24 @@ class GHOSTLive:
                 pystray = importlib.import_module("pystray")
                 return pystray.Menu(
                     pystray.MenuItem(
-                        lambda item: "🔇 Unmute" if self.ui.muted else "🔊 Mute (F4)",
+                        lambda item: "ðŸ”‡ Unmute" if self.ui.muted else "ðŸ”Š Mute (F4)",
                         _on_ui(self.ui._toggle_mute),
                     ),
                     pystray.MenuItem(
-                        lambda item: "😴 Stop Wake Word" if _wake_active() else "💤 Activate Wake Word",
+                        lambda item: "ðŸ˜´ Stop Wake Word" if _wake_active() else "ðŸ’¤ Activate Wake Word",
                         _toggle_wake,
                     ),
-                    pystray.MenuItem("📋 Daily Briefing", _brief),
-                    pystray.MenuItem("👁 Hide/Show Window", _hide_show),
+                    pystray.MenuItem("ðŸ“‹ Daily Briefing", _brief),
+                    pystray.MenuItem("ðŸ‘ Hide/Show Window", _hide_show),
                     pystray.Menu.SEPARATOR,
-                    pystray.MenuItem("🚪 Quit GHOST", _quit, default=True),
+                    pystray.MenuItem("ðŸšª Quit GHOST", _quit, default=True),
                 )
 
             tray_ok   = system_tray.configure_icon(menu_factory)
             hot_ok    = system_tray.register_hotkeys(callbacks)
-            print(f"[Tray] 🖥 Tray: {'on' if tray_ok else 'off'} | Hotkeys: {hot_ok} registered ({system_tray.available()})")
+            print(f"[Tray] ðŸ–¥ Tray: {'on' if tray_ok else 'off'} | Hotkeys: {hot_ok} registered ({system_tray.available()})")
         except Exception as e:
-            print(f"[Tray] ⚠️ Could not attach tray: {e}")
+            print(f"[Tray] âš ï¸ Could not attach tray: {e}")
             import traceback; traceback.print_exc()
 
     def _mark_human_confirmed(self):
@@ -1745,6 +1787,13 @@ class GHOSTLive:
             "\u09a8\u09be", "\u09a8\u09be\u09b9"
         }
 
+        print(
+            f"[CONFIRM DEBUG] received={normalized!r}, "
+            f"awaiting={self._awaiting_human_confirmation}, "
+            f"pending={self._pending_human_fingerprint is not None}, "
+            f"approved={self._approved_human_fingerprint is not None}"
+        )
+
         if not self._awaiting_human_confirmation:
             return
 
@@ -1753,6 +1802,7 @@ class GHOSTLive:
         elif normalized in negative:
             self._pending_human_fingerprint = None
             self._approved_human_fingerprint = None
+            self._pending_confirmation_token = None
             self._awaiting_human_confirmation = False
             self._human_confirmed = False
             print("[GHOST] Pending action approval cancelled.")
@@ -1809,7 +1859,7 @@ class GHOSTLive:
             return self._phase
 
     def _schedule_session_reload(self):
-        """Mode/voice changed — close the live session shortly so run() reconnects
+        """Mode/voice changed â€” close the live session shortly so run() reconnects
         and re-applies the system prompt / speech config from memory."""
         if not self._loop or not self.session:
             return
@@ -1866,9 +1916,9 @@ class GHOSTLive:
                     }
                 }
             })
-            print("[Memory] 🧠 Rolling summary persisted")
+            print("[Memory] ðŸ§  Rolling summary persisted")
         except Exception as e:
-            print(f"[Memory] ⚠️ Could not persist summary: {e}")
+            print(f"[Memory] âš ï¸ Could not persist summary: {e}")
 
     def speak(self, text: str):
         if not self._loop or not self.session or not self._send_lock:
@@ -1880,7 +1930,7 @@ class GHOSTLive:
 
     def _log_tool_error(self, tool_name: str, tr: ToolResult):
         short = str(tr.content)[:120]
-        self.ui.write_log(f"ERR: {tool_name} — {short}")
+        self.ui.write_log(f"ERR: {tool_name} â€” {short}")
         if tr.error_kind == "fatal":
             self.speak(f"Sir, {tool_name} encountered an error. {short}")
 
@@ -1918,7 +1968,7 @@ class GHOSTLive:
             value    = args.get("value", "")
             if key and value:
                 update_memory({category: {key: {"value": value}}})
-                print(f"[Memory] 💾 save_memory: {category}/{key} = {value}")
+                print(f"[Memory] ðŸ’¾ save_memory: {category}/{key} = {value}")
             return "ok"
 
         def _set_mode(args):
@@ -1955,8 +2005,8 @@ class GHOSTLive:
             try:
                 n = api_keys.add_key(key)
             except ValueError as e:
-                return f"❌ {e}"
-            return (f"✅ Yangi API kalit qo'shildi (jami: {n}). "
+                return f"âŒ {e}"
+            return (f"âœ… Yangi API kalit qo'shildi (jami: {n}). "
                     "Limit tugagan kalitlar avtomatik aylanadi.")
 
         def _google_auth(args):
@@ -1971,7 +2021,7 @@ class GHOSTLive:
                         + ". /google_auth_status bilan ko'ring.")
             info = google_oauth.auth_start()
             if not info.get("ok"):
-                return f"❌ {info.get('error')}"
+                return f"âŒ {info.get('error')}"
             device_code = info["device_code"]
             user_code   = info["user_code"]
             url         = info.get("verification_url", "google.com/device")
@@ -1982,7 +2032,7 @@ class GHOSTLive:
                 except Exception as e:
                     print(f"[Google] auth poll error: {e}")
             threading.Thread(target=_poll, daemon=True).start()
-            return (f"📱 Avtorizatsiya kodi: *{user_code}*\n"
+            return (f"ðŸ“± Avtorizatsiya kodi: *{user_code}*\n"
                     f"Telefonda oching: {url}\n"
                     "Google akkauntingizga kiring va kodni kiriting.\n"
                     "Tasdiqlagach men avtomatik saqlayman. 2-3 daqiqa kuting, "
@@ -2170,10 +2220,10 @@ class GHOSTLive:
         from safety import sanitize as _sanitize
         blocked = self.loop_guard.check(name, args)
         if blocked:
-            print(f"[GHOST] 🛑 {name} blocked by loop guard")
+            print(f"[GHOST] ðŸ›‘ {name} blocked by loop guard")
             return ToolResult(ok=False, content=blocked, error_kind="loop")
 
-        # ── Safety gate: high-risk actions need explicit user confirmation ──
+        # â”€â”€ Safety gate: high-risk actions need explicit user confirmation â”€â”€
         from safety import (
             needs_confirmation, describe, CONFIRM_MESSAGE,
             CONFIRM_PARAM, CONFIRM_TOKEN_PARAM, issue_confirmation_token,
@@ -2182,30 +2232,86 @@ class GHOSTLive:
         confirm = bool(args.pop(CONFIRM_PARAM, False))
         confirm_token = str(args.pop(CONFIRM_TOKEN_PARAM, ""))
         face_verify = bool(args.pop("face_verify", False))
-        if needs_confirmation(name, args, confirm=confirm, confirm_token=confirm_token):
-            token = issue_confirmation_token(name, args) if not confirm else ""
-            print(f"[GHOST] ⛔ {name} blocked — confirmation required")
-            self._human_confirmed = False
-            self._pending_human_fingerprint = _fingerprint(name, args)
-            self._approved_human_fingerprint = None
-            self._awaiting_human_confirmation = True
+
+        fingerprint = _fingerprint(name, args)
+        requires_confirmation = needs_confirmation(name, args)
+
+        # Never let approval for one action authorize a different action.
+        if (
+            self._approved_human_fingerprint is not None
+            and self._approved_human_fingerprint != fingerprint
+        ):
+            print(f"[GHOST] {name} rejected - approved action does not match.")
             return ToolResult(
                 ok=True,
-                content=CONFIRM_MESSAGE.format(desc=describe(name, args),
-                                               param=CONFIRM_PARAM)
-                + (f"\n[token: {token}]" if token else ""),
+                content="Action blocked: this is not the action the user approved.",
                 error_kind="confirmation",
             )
-        # Defense-in-depth: if confirm is asserted, require human verification
-        if confirm and self._approved_human_fingerprint != _fingerprint(name, args):
-            print(f"[GHOST] ⛔ {name} rejected — no human consent detected.")
-            return ToolResult(
-                ok=True,
-                content="Action blocked: human user has not verbally approved this yet. Ask the user for permission first.",
-                error_kind="confirmation",
-            )
-        self._approved_human_fingerprint = None
-        self._human_confirmed = False
+
+        if requires_confirmation:
+            if self._approved_human_fingerprint == fingerprint:
+                if not confirm:
+                    return ToolResult(
+                        ok=True,
+                        content="Action blocked: retry this exact action with confirm=true.",
+                        error_kind="confirmation",
+                    )
+
+                if not confirm_token:
+                    confirm_token = self._pending_confirmation_token or ""
+
+                if needs_confirmation(
+                    name, args, confirm=True, confirm_token=confirm_token
+                ):
+                    print(f"[GHOST] {name} rejected - confirmation token invalid or expired.")
+                    return ToolResult(
+                        ok=True,
+                        content="Action blocked: confirmation token is invalid or expired. Request confirmation again.",
+                        error_kind="confirmation",
+                    )
+
+                # Exact human approval and one-time token validated.
+                self._approved_human_fingerprint = None
+                self._pending_confirmation_token = None
+                self._human_confirmed = False
+
+            else:
+                if (
+                    self._pending_human_fingerprint is not None
+                    and self._pending_human_fingerprint != fingerprint
+                ):
+                    return ToolResult(
+                        ok=True,
+                        content="Another action is awaiting confirmation. Resolve it before requesting a different action.",
+                        error_kind="confirmation",
+                    )
+
+                if self._pending_human_fingerprint is None:
+                    token = issue_confirmation_token(name, args)
+                    self._pending_confirmation_token = token
+                    self._pending_human_fingerprint = fingerprint
+                    self._approved_human_fingerprint = None
+                    self._human_confirmed = False
+                    self._awaiting_human_confirmation = True
+                else:
+                    if confirm:
+                        return ToolResult(
+                            ok=True,
+                            content="Action blocked: permission denied. The human user has not verbally approved this action.",
+                            error_kind="confirmation",
+                        )
+                    token = self._pending_confirmation_token or ""
+
+                print(f"[GHOST] {name} blocked - confirmation required")
+                return ToolResult(
+                    ok=True,
+                    content=CONFIRM_MESSAGE.format(
+                        desc=describe(name, args), param=CONFIRM_PARAM
+                    ) + (f"\n[token: {token}]" if token else ""),
+                    error_kind="confirmation",
+                )
+        if name == "outlook" and str(args.get("action", "")).strip().lower() in {"move_email", "bulk_organize", "delete_folder"}:
+            args["_ghost_safety_approved"] = True
 
         entry = self._tool_handlers.get(name)
         if entry is None:
@@ -2225,7 +2331,7 @@ class GHOSTLive:
                     error_kind="identity",
                 )
 
-        print(f"[Telegram] 🔧 {name} {_sanitize(name, args)}")
+        print(f"[Telegram] ðŸ”§ {name} {_sanitize(name, args)}")
         return await run_sync_tool(lambda: fn(args), name, timeout=timeout)
 
     
@@ -2240,7 +2346,7 @@ class GHOSTLive:
         sys_prompt = _load_system_prompt()
 
         now      = datetime.now()
-        time_str = now.strftime("%A, %B %d, %Y — %I:%M %p")
+        time_str = now.strftime("%A, %B %d, %Y â€” %I:%M %p")
         time_ctx = (
             f"[CURRENT DATE & TIME]\n"
             f"Right now it is: {time_str}\n"
@@ -2259,7 +2365,7 @@ class GHOSTLive:
         recent_ctx = self._rolling_digest(limit=1400)
         if recent_ctx:
             parts.append(
-                "[RECENT CONVERSATION — use it to stay consistent, but focus on what the user just said]\n"
+                "[RECENT CONVERSATION â€” use it to stay consistent, but focus on what the user just said]\n"
                 + recent_ctx + "\n"
             )
         if mem_str:
@@ -2295,17 +2401,17 @@ class GHOSTLive:
 
         from safety import sanitize as _sanitize
         log_tool(name, _sanitize(name, args))
-        print(f"[GHOST] 🔧 {name}  {_sanitize(name, args)}")
+        print(f"[GHOST] ðŸ”§ {name}  {_sanitize(name, args)}")
         self.ui.set_state("THINKING")
 
-        # ── save_memory: sessiz, hızlı, Gemini'ye bildirim yok ───────────────
+        # â”€â”€ save_memory: sessiz, hÄ±zlÄ±, Gemini'ye bildirim yok â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         if name == "save_memory":
             category = args.get("category", "notes")
             key      = args.get("key", "")
             value    = args.get("value", "")
             if key and value:
                 update_memory({category: {key: {"value": value}}})
-                print(f"[Memory] 💾 save_memory: {category}/{key} = {value}")
+                print(f"[Memory] ðŸ’¾ save_memory: {category}/{key} = {value}")
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
             return types.FunctionResponse(
@@ -2313,7 +2419,7 @@ class GHOSTLive:
                 response={"result": "ok", "silent": True}
             )
 
-        # ── set_mode / set_mood / set_voice: persist style across sessions ──
+        # â”€â”€ set_mode / set_mood / set_voice: persist style across sessions â”€â”€
         if name == "set_mode":
             mode = _normalize_mode(args.get("mode", ""))
             if not mode:
@@ -2366,10 +2472,10 @@ class GHOSTLive:
 
         result = "Done."
 
-        # ── Loop guard: stop identical-arg / ping-pong tool loops in live mode ──
+        # â”€â”€ Loop guard: stop identical-arg / ping-pong tool loops in live mode â”€â”€
         blocked = self.loop_guard.check(name, args)
         if blocked:
-            print(f"[GHOST] 🛑 {name} blocked by loop guard")
+            print(f"[GHOST] ðŸ›‘ {name} blocked by loop guard")
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
             return types.FunctionResponse(
@@ -2377,7 +2483,7 @@ class GHOSTLive:
                 response={"result": blocked}
             )
 
-        # ── Safety gate: high-risk actions need explicit user confirmation ──
+        # â”€â”€ Safety gate: high-risk actions need explicit user confirmation â”€â”€
         from safety import (
             needs_confirmation, describe, CONFIRM_MESSAGE,
             CONFIRM_PARAM, CONFIRM_TOKEN_PARAM, issue_confirmation_token, sanitize,
@@ -2385,31 +2491,91 @@ class GHOSTLive:
         from safety import _fingerprint
         confirm = bool(args.pop(CONFIRM_PARAM, False))
         confirm_token = str(args.pop(CONFIRM_TOKEN_PARAM, ""))
-        if needs_confirmation(name, args, confirm=confirm, confirm_token=confirm_token):
-            token = issue_confirmation_token(name, args) if not confirm else ""
-            print(f"[GHOST] ⛔ {name} blocked — confirmation required")
-            self._human_confirmed = False
-            self._pending_human_fingerprint = _fingerprint(name, args)
-            self._approved_human_fingerprint = None
-            self._awaiting_human_confirmation = True
-            log_tool(name, args, error="confirmation required")
-            if not self.ui.muted:
-                self.ui.set_state("LISTENING")
-            return types.FunctionResponse(
-                id=fc.id, name=name,
-                response={"result": CONFIRM_MESSAGE.format(
-                    desc=describe(name, args), param=CONFIRM_PARAM)
-                    + (f"\n[token: {token}]" if token else "")}
-            )
-        if confirm and self._approved_human_fingerprint != _fingerprint(name, args):
-            print(f"[GHOST] ⛔ {name} rejected — no human consent detected.")
-            return types.FunctionResponse(
-                id=fc.id, name=name,
-                response={"result": "Action blocked: human user has not verbally approved this yet. Ask the user for permission first."}
-            )
-        self._approved_human_fingerprint = None
-        self._human_confirmed = False
 
+        fingerprint = _fingerprint(name, args)
+        requires_confirmation = needs_confirmation(name, args)
+
+        # Never let approval for one action authorize a different action.
+        if (
+            self._approved_human_fingerprint is not None
+            and self._approved_human_fingerprint != fingerprint
+        ):
+            print(f"[GHOST] {name} rejected - approved action does not match.")
+            return types.FunctionResponse(
+                id=fc.id,
+                name=name,
+                response={"result": "Action blocked: this is not the action the user approved."}
+            )
+
+        if requires_confirmation:
+            if self._approved_human_fingerprint == fingerprint:
+                if not confirm:
+                    return types.FunctionResponse(
+                        id=fc.id,
+                        name=name,
+                        response={"result": "Action blocked: retry this exact action with confirm=true."}
+                    )
+
+                if not confirm_token:
+                    confirm_token = self._pending_confirmation_token or ""
+
+                if needs_confirmation(
+                    name, args, confirm=True, confirm_token=confirm_token
+                ):
+                    print(f"[GHOST] {name} rejected - confirmation token invalid or expired.")
+                    return types.FunctionResponse(
+                        id=fc.id,
+                        name=name,
+                        response={"result": "Action blocked: confirmation token is invalid or expired. Request confirmation again."}
+                    )
+
+                # Exact human approval and one-time token validated.
+                self._approved_human_fingerprint = None
+                self._pending_confirmation_token = None
+                self._human_confirmed = False
+
+            else:
+                if (
+                    self._pending_human_fingerprint is not None
+                    and self._pending_human_fingerprint != fingerprint
+                ):
+                    return types.FunctionResponse(
+                        id=fc.id,
+                        name=name,
+                        response={"result": "Another action is awaiting confirmation. Resolve it before requesting a different action."}
+                    )
+
+                if self._pending_human_fingerprint is None:
+                    token = issue_confirmation_token(name, args)
+                    self._pending_confirmation_token = token
+                    self._pending_human_fingerprint = fingerprint
+                    self._approved_human_fingerprint = None
+                    self._human_confirmed = False
+                    self._awaiting_human_confirmation = True
+                else:
+                    if confirm:
+                        return types.FunctionResponse(
+                            id=fc.id,
+                            name=name,
+                            response={"result": "Action blocked: human user has not verbally approved this yet."}
+                        )
+                    token = self._pending_confirmation_token or ""
+
+                print(f"[GHOST] {name} blocked - confirmation required")
+                log_tool(name, args, error="confirmation required")
+                if not self.ui.muted:
+                    self.ui.set_state("LISTENING")
+                return types.FunctionResponse(
+                    id=fc.id,
+                    name=name,
+                    response={
+                        "result": CONFIRM_MESSAGE.format(
+                            desc=describe(name, args), param=CONFIRM_PARAM
+                        ) + (f"\n[token: {token}]" if token else "")
+                    }
+                )
+        if name == "outlook" and str(args.get("action", "")).strip().lower() in {"move_email", "bulk_organize", "delete_folder"}:
+            args["_ghost_safety_approved"] = True
 
         try:
             # Uniform dispatch through the shared handler table so every
@@ -2428,7 +2594,7 @@ class GHOSTLive:
             result = f"Tool '{name}' failed: {e}"
             traceback.print_exc()
             log_tool(name, args, error=e)
-            self.ui.write_log(f"ERR: {name} — {str(e)[:120]}")
+            self.ui.write_log(f"ERR: {name} â€” {str(e)[:120]}")
             try:
                 self.speak(f"Sir, {name} hit an error. {str(e)[:80]}")
             except Exception:
@@ -2439,9 +2605,9 @@ class GHOSTLive:
             self.ui.set_state("LISTENING")
 
         log_tool(name, args, result=result)
-        print(f"[GHOST] 📤 {name} → {str(result)[:80]}")
+        print(f"[GHOST] ðŸ“¤ {name} â†’ {str(result)[:80]}")
 
-        # ── Result: tek cümle söyle, dur ──────────────────────────────────────
+        # â”€â”€ Result: tek cÃ¼mle sÃ¶yle, dur â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         return types.FunctionResponse(
             id=fc.id, name=name,
             response={"result": result}
@@ -2486,7 +2652,7 @@ class GHOSTLive:
             pending = [s for s in self._schedules if not s.get("fired")]
             if not pending:
                 return "No active scheduled actions, sir."
-            lines = [f"ID {s['id']} → '{s['message']}' at {self._fmt_time(s['fire_at'])}"
+            lines = [f"ID {s['id']} â†’ '{s['message']}' at {self._fmt_time(s['fire_at'])}"
                      for s in pending[:8]]
             return "Active schedules: " + "; ".join(lines)
 
@@ -2498,7 +2664,7 @@ class GHOSTLive:
             return "?"
 
     async def _scheduler_loop(self):
-        """Fire due scheduled actions — speak + notify, once each."""
+        """Fire due scheduled actions â€” speak + notify, once each."""
         try:
             from actions.notifications import notify
         except Exception:
@@ -2512,8 +2678,8 @@ class GHOSTLive:
                             due.append(s)
                             s["fired"] = True
                 for s in due:
-                    msg = f"⏰ Reminder: {s['message']}"
-                    print(f"[Scheduler] 🔔 {msg}")
+                    msg = f"â° Reminder: {s['message']}"
+                    print(f"[Scheduler] ðŸ”” {msg}")
                     if self.session:
                         self.speak(msg)
                     self.ui.write_log(msg)
@@ -2526,7 +2692,7 @@ class GHOSTLive:
                         except Exception:
                             pass
             except Exception as e:
-                print(f"[Scheduler] ⚠️ {e}")
+                print(f"[Scheduler] âš ï¸ {e}")
             await asyncio.sleep(5)
 
     async def _monitor_loop(self, interval: float = 30.0):
@@ -2537,16 +2703,16 @@ class GHOSTLive:
             try:
                 alerts = await asyncio.to_thread(check_monitor_rules)
                 for text in alerts:
-                    print(f"[Monitor] 🔔 {text}")
+                    print(f"[Monitor] ðŸ”” {text}")
                     self.ui.write_log(text)
                     if self.session:
                         self.speak(text)
             except Exception as e:
-                print(f"[Monitor] ⚠️ {e}")
+                print(f"[Monitor] âš ï¸ {e}")
             try:
                 alerts = await asyncio.to_thread(check_guardian)
                 for text in alerts:
-                    print(f"[Guardian] 🔔 {text}")
+                    print(f"[Guardian] ðŸ”” {text}")
                     self.ui.write_log(text)
                     from actions.notifications import notify
                     await asyncio.to_thread(
@@ -2556,10 +2722,10 @@ class GHOSTLive:
                     if self.session:
                         self.speak(text)
             except Exception as e:
-                print(f"[Guardian] ⚠️ {e}")
+                print(f"[Guardian] âš ï¸ {e}")
             try:
                 for text in await asyncio.to_thread(check_email_watch):
-                    print(f"[Email] 🔔 {text}")
+                    print(f"[Email] ðŸ”” {text}")
                     self.ui.write_log(text)
                     from actions.notifications import notify
                     await asyncio.to_thread(
@@ -2569,10 +2735,10 @@ class GHOSTLive:
                     if self.session:
                         self.speak(text)
             except Exception as e:
-                print(f"[Email] ⚠️ {e}")
+                print(f"[Email] âš ï¸ {e}")
             await asyncio.sleep(interval)
 
-    # ── Telegram remote-control bot ──────────────────────────────────────────
+    # â”€â”€ Telegram remote-control bot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def _telegram_context(self) -> str:
         from datetime import datetime
@@ -2583,7 +2749,7 @@ class GHOSTLive:
         now        = datetime.now()
         parts = [
             "[CURRENT DATE & TIME]",
-            f"Right now it is: {now.strftime('%A, %B %d, %Y — %I:%M %p')}",
+            f"Right now it is: {now.strftime('%A, %B %d, %Y â€” %I:%M %p')}",
             "",
             "[ASSISTANT MODE & MOOD]",
             f"Mode: {mode}  Mood: {mood}  Voice: {voice}",
@@ -2595,7 +2761,7 @@ class GHOSTLive:
         tg_hist = self._tg_history_context(limit=900)
         if tg_hist:
             parts += [
-                "[TELEGRAM CHAT HISTORY — previous exchanges with this user, "
+                "[TELEGRAM CHAT HISTORY â€” previous exchanges with this user, "
                 "use it to stay consistent]",
                 tg_hist, "",
             ]
@@ -2627,7 +2793,7 @@ class GHOSTLive:
             self._tg_history.append((role, text))
 
     async def _telegram_run_command(self, text: str) -> str:
-        """Mini agent loop: Gemini interprets → tools run → text reply."""
+        """Mini agent loop: Gemini interprets â†’ tools run â†’ text reply."""
         import api_keys
         from importlib import import_module
         gtypes = import_module("google.genai.types")
@@ -2649,7 +2815,7 @@ class GHOSTLive:
             except Exception as e:
                 msg = str(e)
                 if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
-                    return ("⚠️ Barcha API kalitlari limitga yetgan "
+                    return ("âš ï¸ Barcha API kalitlari limitga yetgan "
                             "(20 so'rov/kun). Yangi kalit qo'shing yoki "
                             "bir necha soatdan keyin urinib ko'ring.")
                 return f"Model error: {e}"
@@ -2671,7 +2837,7 @@ class GHOSTLive:
                     raw = f"(tool {name} returned no data)"
                 result = raw[:400]
                 tool_results.append(f"{name}: {result[:120]}")
-                print(f"[Telegram] 🔧 {name} {_sanitize(name, args)} → {str(result)[:80]}")
+                print(f"[Telegram] ðŸ”§ {name} {_sanitize(name, args)} â†’ {str(result)[:80]}")
                 tool_parts.append(gtypes.Part(
                     function_response=gtypes.FunctionResponse(
                         name=name, response={"result": result})))
@@ -2681,8 +2847,8 @@ class GHOSTLive:
             ]
         if not final:
             if tool_results:
-                final = ("⚡ Bajarildi:\n• " +
-                         "\n• ".join(tool_results[:6]))
+                final = ("âš¡ Bajarildi:\nâ€¢ " +
+                         "\nâ€¢ ".join(tool_results[:6]))
             else:
                 final = "Done, sir."
         return final
@@ -2707,7 +2873,7 @@ class GHOSTLive:
                 self.ui.set_state("MUTED")
                 self.ui.write_log("SYS: Telegram: microphone muted.")
                 self.ui._safe_ui(self.ui._draw_mute_button)
-            return True, ("🔇 Mikrofon o'chirildi (MUTED). "
+            return True, ("ðŸ”‡ Mikrofon o'chirildi (MUTED). "
                           "Endi faqat matn/Telegram orqali gapiryapman."), None
         if low == "/unmute":
             if self.ui.muted:
@@ -2715,40 +2881,40 @@ class GHOSTLive:
                 self.ui.set_state("LISTENING")
                 self.ui.write_log("SYS: Telegram: microphone active.")
                 self.ui._safe_ui(self.ui._draw_mute_button)
-            return True, "🎤 Mikrofon yoniq (LIVE). Gaplashavering.", None
+            return True, "ðŸŽ¤ Mikrofon yoniq (LIVE). Gaplashavering.", None
         if low == "/screenshot":
             shot = await asyncio.to_thread(_take_screenshot_bytes)
             if shot:
                 return True, shot, None
-            return True, "📸 Screenshot olishning iloji bo'lmadi (pyautogui?).", None
+            return True, "ðŸ“¸ Screenshot olishning iloji bo'lmadi (pyautogui?).", None
         if low == "/mode" or low.startswith("/mode "):
             mode, mood = _get_style_from_memory(load_memory())
             rest = text.strip()[len("/mode"):].strip()
             if not rest:
-                return True, (f"🧭 Hozirgi rejim: <b>{tg.html_escape(mode)}</b> "
+                return True, (f"ðŸ§­ Hozirgi rejim: <b>{tg.html_escape(mode)}</b> "
                               f"(kayfiyat: {tg.html_escape(mood)})\n"
-                              "Tanlang 👇"), TG_MODE_KEYBOARD
+                              "Tanlang ðŸ‘‡"), TG_MODE_KEYBOARD
             new_mode = _normalize_mode(rest)
             if not new_mode:
-                return True, ("❌ Noto'g'ri rejim. Tanlang: normal, girlfriend, "
+                return True, ("âŒ Noto'g'ri rejim. Tanlang: normal, girlfriend, "
                               "crazy_friend, butler, friend, casual."), None
             update_memory({"preferences": {"assistant_mode": {"value": new_mode}}})
             self._schedule_session_reload()
-            return True, f"🔄 Rejim o'zgartirildi: <b>{tg.html_escape(new_mode)}</b>.", None
+            return True, f"ðŸ”„ Rejim o'zgartirildi: <b>{tg.html_escape(new_mode)}</b>.", None
         if low == "/voice" or low.startswith("/voice "):
             current = _get_voice_from_memory(load_memory())
             rest = text.strip()[len("/voice"):].strip()
             if not rest:
-                desc = "\n".join(f"• <b>{v}</b> — {VOICES[v]}" for v in VOICE_NAMES)
-                return True, (f"🗣 Hozirgi ovoz: <b>{tg.html_escape(current)}</b>\n"
-                              f"{desc}\nTanlang 👇"), TG_VOICE_KEYBOARD
+                desc = "\n".join(f"â€¢ <b>{v}</b> â€” {VOICES[v]}" for v in VOICE_NAMES)
+                return True, (f"ðŸ—£ Hozirgi ovoz: <b>{tg.html_escape(current)}</b>\n"
+                              f"{desc}\nTanlang ðŸ‘‡"), TG_VOICE_KEYBOARD
             new_voice = _normalize_voice(rest)
             if not new_voice:
-                return True, ("❌ Noto'g'ri ovoz. Tanlang: " +
+                return True, ("âŒ Noto'g'ri ovoz. Tanlang: " +
                               ", ".join(VOICE_NAMES) + "."), None
             update_memory({"preferences": {"assistant_voice": {"value": new_voice}}})
             self._schedule_session_reload()
-            return True, (f"🎙 Ovoz o'zgartirildi: <b>{tg.html_escape(new_voice)}</b>. "
+            return True, (f"ðŸŽ™ Ovoz o'zgartirildi: <b>{tg.html_escape(new_voice)}</b>. "
                           "Bir necha soniyada yangi ovoz bilan ulanyapman..."), None
         return False, None, None
 
@@ -2758,15 +2924,15 @@ class GHOSTLive:
         phase   = self._current_phase().upper()
         mode, mood = _get_style_from_memory(load_memory())
         voice   = _get_voice_from_memory(load_memory())
-        now     = datetime.now().strftime("%A, %B %d, %Y — %I:%M %p")
+        now     = datetime.now().strftime("%A, %B %d, %Y â€” %I:%M %p")
         return (
-            "📊 <b>GHOST statusi</b>\n"
-            f"🕒 {tg.html_escape(now)}\n"
-            f"🎙 Mikrofon: <b>{'🔇 MUTED' if self.ui.muted else '🎤 LIVE'}</b>\n"
-            f"🔄 Holat: <b>{tg.html_escape(phase)}</b>\n"
-            f"🧭 Rejim: <b>{tg.html_escape(mode)}</b>  |  "
+            "ðŸ“Š <b>GHOST statusi</b>\n"
+            f"ðŸ•’ {tg.html_escape(now)}\n"
+            f"ðŸŽ™ Mikrofon: <b>{'ðŸ”‡ MUTED' if self.ui.muted else 'ðŸŽ¤ LIVE'}</b>\n"
+            f"ðŸ”„ Holat: <b>{tg.html_escape(phase)}</b>\n"
+            f"ðŸ§­ Rejim: <b>{tg.html_escape(mode)}</b>  |  "
             f"Kayfiyat: <b>{tg.html_escape(mood)}</b>\n"
-            f"🗣 Ovoz: <b>{tg.html_escape(voice)}</b>"
+            f"ðŸ—£ Ovoz: <b>{tg.html_escape(voice)}</b>"
         )
 
     async def _telegram_handle_text(self, token, chat, text: str):
@@ -2775,13 +2941,13 @@ class GHOSTLive:
         if handled:
             if isinstance(result, bytes):
                 tg.send_photo(token, chat, result,
-                              caption="📸 Hozirgi ekran, sir.")
+                              caption="ðŸ“¸ Hozirgi ekran, sir.")
             elif result:
                 tg.send_message(token, chat, tg.html_escape(str(result)),
                                 reply_markup=reply_markup)
             return
         tg.send_typing(token, chat)
-        placeholder = tg.send_message(token, chat, "⏳ ...") or {}
+        placeholder = tg.send_message(token, chat, "â³ ...") or {}
         msg_id = placeholder.get("message_id")
         answer = await self._telegram_run_command(text)
         safe   = tg.html_escape(answer)
@@ -2799,7 +2965,7 @@ class GHOSTLive:
             tg.send_message(token, chat, "That audio wasn't readable, sir.")
             return
         tg.send_typing(token, chat)
-        placeholder = tg.send_message(token, chat, "🎧 ...") or {}
+        placeholder = tg.send_message(token, chat, "ðŸŽ§ ...") or {}
         msg_id = placeholder.get("message_id")
 
         def _edit(text: str):
@@ -2825,7 +2991,7 @@ class GHOSTLive:
             return
         if caption:
             transcript = caption
-        _edit(f"📝 <i>Eshitildi:</i> {tg.html_escape(transcript[:300])}")
+        _edit(f"ðŸ“ <i>Eshitildi:</i> {tg.html_escape(transcript[:300])}")
         answer = await self._telegram_run_command(transcript)
         _edit(tg.html_escape(answer))
         self._remember_tg_turn("user", transcript)
@@ -2838,11 +3004,11 @@ class GHOSTLive:
             return
         chat = self.telegram_chat
         if not chat:
-            print("[Telegram] ⚠️ telegram_chat_id not configured in config/api_keys.json — polling disabled.")
+            print("[Telegram] âš ï¸ telegram_chat_id not configured in config/api_keys.json â€” polling disabled.")
             self.ui.write_log("SYS: Telegram disabled (no chat_id).")
             return
         if not await asyncio.to_thread(tg.ping_bot, token):
-            print("[Telegram] ⚠️ Bot token rejected — check config/api_keys.json.")
+            print("[Telegram] âš ï¸ Bot token rejected â€” check config/api_keys.json.")
             return
         offset_path = BASE_DIR / "config" / "telegram_offset.txt"
 
@@ -2858,10 +3024,10 @@ class GHOSTLive:
             except Exception:
                 pass
 
-        print("[Telegram] 🤖 Bot online — polling for your messages.")
+        print("[Telegram] ðŸ¤– Bot online â€” polling for your messages.")
         self.ui.write_log("SYS: Telegram bot online.")
         if not await asyncio.to_thread(tg.set_bot_commands, token):
-            print("[Telegram] ⚠️ Could not set bot command menu.")
+            print("[Telegram] âš ï¸ Could not set bot command menu.")
         offset = _load_offset()
         while True:
             try:
@@ -2894,9 +3060,9 @@ class GHOSTLive:
                             await self._telegram_handle_text(token, chat, text)
                     except Exception as e:
                         import traceback; traceback.print_exc()
-                        tg.send_message(token, chat, tg.html_escape(f"⚠️ {e}"))
+                        tg.send_message(token, chat, tg.html_escape(f"âš ï¸ {e}"))
             except Exception as e:
-                print(f"[Telegram] ⚠️ {e}")
+                print(f"[Telegram] âš ï¸ {e}")
             await asyncio.sleep(0.5)
 
     async def _send_realtime(self):
@@ -2908,7 +3074,7 @@ class GHOSTLive:
                 )
 
     async def _listen_audio(self):
-        print("[GHOST] 🎤 Mic started")
+        print("[GHOST] ðŸŽ¤ Mic started")
         loop = asyncio.get_event_loop()
 
         def callback(indata, frames, time_info, status):
@@ -2919,7 +3085,7 @@ class GHOSTLive:
                 loop.call_soon_threadsafe(self._safe_put_mic, data)
 
         if sd is None:
-            print("[GHOST] ⚠️ sounddevice not available — mic disabled")
+            print("[GHOST] âš ï¸ sounddevice not available â€” mic disabled")
             while True:
                 await asyncio.sleep(3600)
 
@@ -2931,11 +3097,11 @@ class GHOSTLive:
                 blocksize=CHUNK_SIZE,
                 callback=callback,
             ):
-                print("[GHOST] 🎤 Mic stream open")
+                print("[GHOST] ðŸŽ¤ Mic stream open")
                 while True:
                     await asyncio.sleep(0.1)
         except Exception as e:
-            print(f"[GHOST] ⚠️ Microphone unavailable ({e}) — continuing in text mode")
+            print(f"[GHOST] âš ï¸ Microphone unavailable ({e}) â€” continuing in text mode")
             self.ui.write_log(f"SYS: Mic unavailable ({str(e)[:60]}).")
             while True:
                 await asyncio.sleep(3600)
@@ -2953,11 +3119,11 @@ class GHOSTLive:
                 speaking = self._is_speaking
                 last     = self._last_play_ts
             if speaking and last and time.monotonic() - last > 25:
-                print("[GHOST] ⏱ Speaking watchdog fired — force-cleared")
+                print("[GHOST] â± Speaking watchdog fired â€” force-cleared")
                 self.set_speaking(False)
 
     async def _receive_audio(self):
-        print("[GHOST] 👂 Recv started")
+        print("[GHOST] ðŸ‘‚ Recv started")
         out_buf, in_buf = [], []
 
         try:
@@ -3017,23 +3183,23 @@ class GHOSTLive:
                     if response.tool_call:
                         fn_responses = []
                         for fc in response.tool_call.function_calls:
-                            print(f"[GHOST] 📞 {fc.name}")
+                            print(f"[GHOST] ðŸ“ž {fc.name}")
                             fr = await self._execute_tool(fc)
                             fn_responses.append(fr)
                         await self.session.send_tool_response(
                             function_responses=fn_responses
                         )
-                        # ── Boş turn YOK — bu "Anladım." sorununu yaratıyordu ──
+                        # â”€â”€ BoÅŸ turn YOK â€” bu "AnladÄ±m." sorununu yaratÄ±yordu â”€â”€
 
         except Exception as e:
-            print(f"[GHOST] ❌ Recv: {e}")
+            print(f"[GHOST] âŒ Recv: {e}")
             traceback.print_exc()
             raise
 
     async def _play_audio(self):
-        print("[GHOST] 🔊 Play started")
+        print("[GHOST] ðŸ”Š Play started")
         if sd is None:
-            print("[GHOST] ⚠️ sounddevice not available — audio output disabled")
+            print("[GHOST] âš ï¸ sounddevice not available â€” audio output disabled")
             while True:
                 chunk = await self.audio_in_queue.get()
                 self.set_speaking(False)
@@ -3070,7 +3236,7 @@ class GHOSTLive:
                     self._turn_complete = False
                     self.set_speaking(False)
         except Exception as e:
-            print(f"[GHOST] ⚠️ Audio output failed ({e}) — running in silent mode")
+            print(f"[GHOST] âš ï¸ Audio output failed ({e}) â€” running in silent mode")
             self.ui.write_log(f"SYS: Speaker unavailable ({str(e)[:60]}).")
             while True:
                 chunk = await self.audio_in_queue.get()
@@ -3117,7 +3283,7 @@ class GHOSTLive:
                             log(f"API client error: {ke}", level="ERROR")
                             await asyncio.sleep(5)
                             continue
-                    print("[GHOST] 🔌 Connecting...")
+                    print("[GHOST] ðŸ”Œ Connecting...")
                     self.ui.set_state("THINKING")
                     self.ui.set_connecting(True)
                     config = self._build_config()
@@ -3135,7 +3301,7 @@ class GHOSTLive:
                         self._ready         = True
 
                         log("Gemini session CONNECTED")
-                        print("[GHOST] ✅ Connected.")
+                        print("[GHOST] âœ… Connected.")
                         self.ui.set_connection(True)
                         self.ui.set_persona(*self._persona_info())
                         self.ui.set_state("LISTENING")
@@ -3151,7 +3317,7 @@ class GHOSTLive:
 
                 except Exception as e:
                     log(f"Session error: {e}", level="ERROR")
-                    print(f"[GHOST] ⚠️ {e}")
+                    print(f"[GHOST] âš ï¸ {e}")
                     traceback.print_exc()
                     # Rotate the key on quota/exhaustion so a dead key can't
                     # pin the reconnect loop forever.
@@ -3173,8 +3339,8 @@ class GHOSTLive:
                 self.set_speaking(False)
                 self.ui.set_connection(False)
                 self.ui.set_state("THINKING")
-                log(f"Session lost — reconnecting in {backoff}s", level="WARN")
-                print(f"[GHOST] 🔄 Reconnecting in {backoff}s...")
+                log(f"Session lost â€” reconnecting in {backoff}s", level="WARN")
+                print(f"[GHOST] ðŸ”„ Reconnecting in {backoff}s...")
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 60)
         finally:
@@ -3207,14 +3373,14 @@ def main():
         try:
             asyncio.run(ghost.run())
         except KeyboardInterrupt:
-            print("\n🔴 Shutting down...")
+            print("\nðŸ”´ Shutting down...")
 
     threading.Thread(target=runner, daemon=True).start()
     ui.root.report_callback_exception = _tk_exception_handler
     try:
         ui.root.mainloop()
     except KeyboardInterrupt:
-        print("\n🛑 Stopping GHOST (Ctrl+C)...")
+        print("\nðŸ›‘ Stopping GHOST (Ctrl+C)...")
         try:
             from actions.system_tray import stop as _tray_stop
             _tray_stop()
@@ -3224,8 +3390,9 @@ def main():
             ui.root.destroy()
         except Exception:
             pass
-        print("👋 Shut down cleanly. See you, sir!")
+        print("ðŸ‘‹ Shut down cleanly. See you, sir!")
 
 
 if __name__ == "__main__":
     main()
+

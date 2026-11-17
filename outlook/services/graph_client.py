@@ -89,8 +89,22 @@ class GraphClient:
                 "$top": limit,
                 "$orderby": "receivedDateTime desc",
                 "$select": (
-                    "id,subject,from,toRecipients,receivedDateTime,"
+                    "id,conversationId,subject,from,toRecipients,receivedDateTime,"
                     "isRead,importance,bodyPreview,body,hasAttachments"
                 )
             }
         )
+
+    def get_recent_sent_emails(self, limit=20):
+        return self.get(
+            "me/mailFolders/sentitems/messages",
+            params={
+                "$top": limit,
+                "$orderby": "sentDateTime desc",
+                "$select": (
+                    "id,conversationId,subject,from,toRecipients,"
+                    "sentDateTime,bodyPreview"
+                )
+            }
+        )
+

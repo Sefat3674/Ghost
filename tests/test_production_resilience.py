@@ -66,90 +66,136 @@ class AudioHardwareResilienceTest(unittest.TestCase):
 
 
 class HumanConsentVerificationTest(unittest.TestCase):
+    def _extract_token(self, result):
+        import re
+        match = re.search(r"\[token: ([^\]]+)\]", str(result.content))
+        self.assertIsNotNone(match, "Blocked response did not contain a token")
+        return match.group(1)
+
     def test_confirm_without_human_approval_is_blocked(self):
         import main
-        ui_mock = MagicMock()
-        live = main.GHOSTLive(ui_mock)
+        live = main.GHOSTLive(MagicMock())
 
-        tok = issue_confirmation_token("cmd_control", {"command": "dir"})
-        # LLM attempts to re-invoke tool with token but human has NOT said yes
         async def run():
-            res = await live._dispatch_tool("cmd_control", {"command": "dir", "confirm": True, "confirm_token": tok})
-            self.assertTrue("Action blocked: human user has not verbally approved this yet" in str(res.content) or
-                            "Permission not granted yet" in str(res.content))
+            # First call: Ghost blocks the action and creates a pending request.
+            first = await live._dispatch_tool(
+                "cmd_control", {"command": "dir"}
+            )
+            self.assertIn("permission", str(first.content).lower())
+            token = self._extract_token(first)
+
+            # Retry with the token, but without local human approval.
+            second = await live._dispatch_tool(
+                "cmd_control",
+                {"command": "dir", "confirm": True, "confirm_token": token}
+            )
+            self.assertIn(
+                "human user has not verbally approved",
+                str(second.content)
+            )
 
         asyncio.run(run())
 
     def test_confirm_with_human_approval_proceeds(self):
         import main
-        ui_mock = MagicMock()
-        live = main.GHOSTLive(ui_mock)
-
-        tok = issue_confirmation_token("cmd_control", {"command": "dir"})
-        # Human explicitly says yes
-        live._mark_human_confirmed()
+        live = main.GHOSTLive(MagicMock())
 
         async def run():
-            # Mock cmd_control to avoid actually executing
-            with patch.dict(live._tool_handlers, {"cmd_control": (lambda a: "Success", 10)}):
-                res = await live._dispatch_tool("cmd_control", {"command": "dir", "confirm": True, "confirm_token": tok})
-                self.assertEqual(res.content, "Success")
+            # First call creates the pending fingerprint and token.
+            first = await live._dispatch_tool(
+                "cmd_control", {"command": "dir"}
+            )
+            token = self._extract_token(first)
+
+            # Simulate the user saying yes inside Ghost.
+            live._handle_confirmation_text("yes")
+
+            with patch.dict(
+                live._tool_handlers,
+                {"cmd_control": (lambda a: "Success", 10)}
+            ):
+                result = await live._dispatch_tool(
+                    "cmd_control",
+                    {
+                        "command": "dir",
+                        "confirm": True,
+                        "confirm_token": token
+                    }
+                )
+                self.assertEqual(result.content, "Success")
 
         asyncio.run(run())
 
     def test_two_pending_requests_approve_one_other_remains_blocked(self):
-        """Simulate two pending high-risk requests (Action A & Action B).
-        When the human approves Action A, ONLY Action A must execute.
-        Action B must remain strictly blocked (neither token nor human flag leaks)."""
         import main
-        ui_mock = MagicMock()
-        live = main.GHOSTLive(ui_mock)
-
-        # Issue tokens for two separate high-risk actions
-        tok_a = issue_confirmation_token("cmd_control", {"command": "dir"})
-        tok_b = issue_confirmation_token("file_controller", {"action": "delete", "path": "test.txt"})
-
+        live = main.GHOSTLive(MagicMock())
         executed = []
+
         handlers = {
             "cmd_control": (lambda a: executed.append("A") or "Ran A", 10),
-            "file_controller": (lambda a: executed.append("B") or "Ran B", 10),
+            "file_controller": (
+                lambda a: executed.append("B") or "Ran B", 10
+            ),
         }
 
         async def run():
             with patch.dict(live._tool_handlers, handlers):
-                # Human verbally approves Action A
-                live._mark_human_confirmed()
+                # Request A and capture its token.
+                first_a = await live._dispatch_tool(
+                    "cmd_control", {"command": "dir"}
+                )
+                token_a = self._extract_token(first_a)
 
-                # Action A executes with its valid token
-                res_a = await live._dispatch_tool(
+                # Approve A locally and execute exactly A.
+                live._handle_confirmation_text("yes")
+                result_a = await live._dispatch_tool(
                     "cmd_control",
-                    {"command": "dir", "confirm": True, "confirm_token": tok_a}
+                    {
+                        "command": "dir",
+                        "confirm": True,
+                        "confirm_token": token_a
+                    }
                 )
-                self.assertEqual(res_a.content, "Ran A")
+                self.assertEqual(result_a.content, "Ran A")
                 self.assertEqual(executed, ["A"])
 
-                # Action B is attempted (either with tok_b or forged tok_a)
-                # Since human consent was consumed by Action A and reset to False, Action B is blocked!
-                res_b = await live._dispatch_tool(
+                # Request B. It must not inherit approval for A.
+                first_b = await live._dispatch_tool(
                     "file_controller",
-                    {"action": "delete", "path": "test.txt", "confirm": True, "confirm_token": tok_b}
+                    {"action": "delete", "path": "test.txt"}
                 )
-                self.assertTrue(
-                    "Action blocked: human user has not verbally approved this yet" in str(res_b.content) or
-                    "confirmation required" in str(res_b.content)
+                token_b = self._extract_token(first_b)
+
+                # Even with B's valid token, no local yes was given for B.
+                result_b = await live._dispatch_tool(
+                    "file_controller",
+                    {
+                        "action": "delete",
+                        "path": "test.txt",
+                        "confirm": True,
+                        "confirm_token": token_b
+                    }
                 )
-                # Ensure Action B was NEVER executed
+                self.assertIn(
+                    "human user has not verbally approved",
+                    str(result_b.content)
+                )
                 self.assertEqual(executed, ["A"])
 
-                # Attempting to replay tok_a against Action B also fails
-                res_b_replay = await live._dispatch_tool(
+                # Replaying A's consumed token against B must also fail.
+                replay = await live._dispatch_tool(
                     "file_controller",
-                    {"action": "delete", "path": "test.txt", "confirm": True, "confirm_token": tok_a}
+                    {
+                        "action": "delete",
+                        "path": "test.txt",
+                        "confirm": True,
+                        "confirm_token": token_a
+                    }
                 )
+                self.assertIn("permission", str(replay.content).lower())
                 self.assertEqual(executed, ["A"])
 
         asyncio.run(run())
-
 
 class TelegramNullCheckTest(unittest.TestCase):
     def test_telegram_loop_exits_cleanly_if_chat_id_is_none(self):

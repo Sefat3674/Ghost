@@ -136,6 +136,22 @@
     "pending_trip_checkup": {
       "value": "One trip has not had a checkup yet.",
       "updated": "2026-11-16"
+    },
+    "conversation_2026-11-16_15-06": {
+      "value": "User: Hello.\nGHOST: Hello. How can I assist you today?\nUser: List all mails from my Outlook.\nGHOST: I have listed the latest 3 emails from your Outlook inbox.\nUser: Read them.\nGHOST: Which email would you like me to read in full? Please specify which one.\nUser: Please read them one by one.\nGHOST: I am reading the first email. Would you like me to read the next one now?\nUser: Yeah, please.\nGHOST: I",
+      "updated": "2026-11-16"
+    },
+    "conversation_2026-11-16_15-11": {
+      "value": "User: हां, मूव करो।\nGHOST: দুঃখিত, মনে হচ্ছে কোনো কারণে অনুমতিটি পেন্ডিং দেখাচ্ছে। এই ইমেইলটি Junk Email ফোল্ডারে মুভ করার জন্য আপনি কি আবার অনুমতি দেবেন?\nUser: হ্যাঁ, অনুমতি দিচ্ছে।\nGHOST: আবারও দুঃখিত, আমি আপনার অনুমতিটি নির্দিষ্ট করতে পারছি না। অনুগ্রহ করে কি শেষ বারের মতো নিশ্চিত করবেন? আপনি কি চান আমি \"Ghost Outlook Integration Test\" ইমেইলটি Junk Email ফোল্ডারে মুভ করি? [token: 8rgFvNkpDe-WnM",
+      "updated": "2026-11-16"
+    },
+    "conversation_2026-11-16_15-14": {
+      "value": "GHOST: বারবার বাধার জন্য দুঃখিত, সিস্টেম আবার নতুন একটি টোকেন তৈরি করেছে। আমি কি এইবার অনুমতিটি পেতে পারি? আমি কি ইমেইলটি Junk Email ফোল্ডারে মুভ করব? [token: Wk0N-ZgVthKQLGRoZ4u_5rjjKxxLyfON]\nUser: Hum. É?\nGHOST: আবারও মনে হচ্ছে সিস্টেম ব্লক করে দিয়েছে। আমি সত্যিই দুঃখিত, কিন্তু প্রতিটা বাধার পর আমাকে আবার নতুন করে অনুমতি চাইতে হচ্ছে। আপনি কি অনুগ্রহ করে আরেকবার বলবেন, \"হ্যাঁ, মুভ করো\"? তাহলে আম",
+      "updated": "2026-11-16"
+    },
+    "conversation_2026-11-16_15-40": {
+      "value": "User: \nGHOST: I have previewed moving the urgent project review email to Ghost_Test_Folder_Renamed; one matching email was found. No emails have been moved yet.\nUser: \nGHOST: Correct. That is the single email matching your criteria.\nUser: \nGHOST: Yes, `Ghost_Test_Folder_Renamed` is identified as the correct destination for the move.\nUser: \nGHOST: I believe there may be a misunderstanding. I need *",
+      "updated": "2026-11-16"
     }
   }
 }
