@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import threading
 import json
 import sys
@@ -1453,33 +1454,90 @@ TOOL_DECLARATIONS = [
         "name": "personal_outlook",
         "description": (
             "PRIMARY TOOL FOR THE USER'S PERSONAL MICROSOFT OUTLOOK ACCOUNT. "
-            "Always use this tool for personal Microsoft email, inbox, "
-            "unread messages, email search and reading, sending and replying, "
-            "drafts, folders, attachments, calendar, contacts, tasks, and "
-            "account profile. Do NOT use the legacy outlook tool for this "
-            "personal account. Use outlook only for explicitly requested "
-            "separate Work/School Outlook accounts. Use gmail for Gmail. "
-            "First use list_tools when exact MCP schemas are needed. "
-            "For calls, use the exact discovered tool_name and arguments. "
-            "When the user explicitly asks for emails across all folders, "
-            "first call outlook_list_folders with recursive=true. "
-            "Then call outlook_list_inbox for each non-empty folder, "
-            "passing that folder name and a suitable count. "
-            "Combine the messages and sort by received date newest first. "
-            "Return only the number of messages requested. "
-            "Never describe an Inbox-only result as all-folder results. "
-            "Read-only tools include outlook_auth_status, outlook_whoami, "
-            "outlook_list_inbox, outlook_read_message, and outlook_search_mail. "
-            "Every mutation, attachment download, and unknown operation "
-            "must pass Ghost's explicit one-time confirmation-token gate. "
-            "Never bypass or fabricate confirmation."
+            "Use this tool for all personal Outlook email, drafts, folders, "
+            "attachments, calendar, contacts, tasks, and account operations. "
+            "Do not use the legacy outlook tool for this account. Use gmail "
+            "only for Gmail and outlook only for a separate Work/School account. "
+
+            "SCHEMA RULE: Use list_tools when exact MCP tool names or argument "
+            "schemas are needed. Call the exact discovered tool_name and pass "
+            "arguments matching its schema. Never invent IDs or arguments. "
+
+            "EMAIL: Use outlook_list_inbox to list messages, "
+            "outlook_search_mail to search, outlook_read_message or "
+            "outlook_read_messages to read, and outlook_list_thread to inspect "
+            "a conversation. When the user requests messages across all folders, "
+            "first list folders recursively, inspect each non-empty folder, "
+            "combine results, and sort newest first. Never describe Inbox-only "
+            "results as all-folder results. Display complete requested fields. "
+
+            "DRAFTS: Use outlook_list_drafts to list drafts. To read a selected "
+            "draft, copy its exact id into outlook_read_message as message_id. "
+            "Display complete To, CC, BCC, Subject, and Body when requested. "
+            "For a proposed draft, show the complete recipient, subject, and "
+            "body first and wait. Create only after explicit approval. Use "
+            "outlook_create_draft to create, outlook_update_draft to revise, "
+            "outlook_send_draft to send, and outlook_delete_draft to delete. "
+            "Never send or delete automatically. Verify completed changes by "
+            "reading the selected draft again when appropriate. "
+
+            "REPLY AND FORWARD: Use outlook_reply or outlook_forward when "
+            "the user explicitly requests those operations. Show the intended "
+            "recipients and complete proposed content before execution. "
+            "Never send a reply or forward without explicit human approval. "
+
+            "ATTACHMENTS: Use outlook_list_attachments or "
+            "outlook_list_task_attachments to inspect attachments. Use the "
+            "appropriate download, upload, attach, or remove tool only for "
+            "the requested file operation. Explain local file downloads and "
+            "attachment changes before execution. Never invent file paths. "
+
+            "FOLDERS: Use outlook_list_folders to inspect folders. Use "
+            "outlook_create_folder, outlook_rename_folder, and "
+            "outlook_delete_folder only after explaining the exact change "
+            "and receiving explicit human approval. "
+
+            "CALENDAR: Use outlook_list_calendars, outlook_list_events, "
+            "outlook_get_event, and outlook_find_event_by_key for read-only "
+            "calendar requests. Use outlook_create_event, outlook_update_event, "
+            "outlook_delete_event, and outlook_rsvp for requested changes. "
+            "Show the event details and exact proposed change before execution. "
+
+            "CONTACTS: Use outlook_list_contacts, outlook_search_contacts, "
+            "and outlook_get_contact to inspect contacts. Use "
+            "outlook_create_contact, outlook_update_contact, and "
+            "outlook_delete_contact only after explicit approval. "
+
+            "TASKS: Use outlook_list_task_lists, outlook_list_tasks, and "
+            "outlook_get_task to inspect tasks. Use outlook_create_task, "
+            "outlook_update_task, outlook_complete_task, and "
+            "outlook_delete_task only after explaining the exact operation "
+            "and receiving explicit approval. "
+
+            "ACCOUNT: Use outlook_auth_status, outlook_whoami, and "
+            "outlook_get_mail_tips for account-related read-only requests. "
+
+            "SAFETY: Every mutation, send, reply, forward, move, delete, "
+            "upload, attachment change, folder change, event change, contact "
+            "change, task change, and unknown operation must pass Ghost's "
+            "existing exact-action human confirmation and one-time token gate. "
+            "Never fabricate approval, confirmation tokens, or user intent. "
+            "A model-generated confirm=true is not human approval. Do not "
+            "execute a different action from the one the user approved. "
+            "Never retry an uncertain mutation automatically. Report failures "
+            "honestly and verify results without repeating a mutation. "
+
+            "MOVE PREVIEW: For a read-only email move preview, use "
+            "action=preview_move directly with query and destination_folder. "
+            "This preview must never move, modify, delete, send, or approve "
+            "messages. "
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "action": {
                     "type": "STRING",
-                    "enum": ["list_tools", "call"]
+                    "enum": ["list_tools", "call", "preview_move"]
                 },
                 "tool_name": {
                     "type": "STRING",
@@ -1488,6 +1546,18 @@ TOOL_DECLARATIONS = [
                 "arguments": {
                     "type": "OBJECT",
                     "description": "Arguments matching the discovered MCP schema."
+                },
+                "query": {
+                    "type": "STRING",
+                    "description": "Search query for preview_move; defaults to subject:URGENT."
+                },
+                "destination_folder": {
+                    "type": "STRING",
+                    "description": "Destination folder for preview_move; defaults to Ghost_Test_Folder_Renamed."
+                },
+                "count": {
+                    "type": "INTEGER",
+                    "description": "Maximum page size for preview_move, from 1 to 100."
                 }
             },
             "required": ["action"]
@@ -1668,6 +1738,8 @@ class GHOSTLive:
         self._pending_human_fingerprint = None
         self._approved_human_fingerprint = None
         self._pending_confirmation_token = None
+        self._pending_human_action = None
+        self._approved_action_running = False
         self.loop_guard     = LoopGuard()
         from actions.akkhor.service import AkkhorService
         self.akkhor_service = AkkhorService(BASE_DIR)
@@ -1800,54 +1872,230 @@ class GHOSTLive:
             import traceback; traceback.print_exc()
 
     def _mark_human_confirmed(self):
-        if self._pending_human_fingerprint is None:
-            return
+        if (
+            self._pending_human_fingerprint is None
+            or self._pending_human_action is None
+            or self._approved_action_running
+        ):
+            return False
 
         self._approved_human_fingerprint = self._pending_human_fingerprint
         self._pending_human_fingerprint = None
         self._human_confirmed = True
         self._awaiting_human_confirmation = False
-        print("[GHOST] Human confirmation bound to the pending action.")
+        self._approved_action_running = True
 
-    def _handle_confirmation_text(self, text: str):
-        normalized = re.sub(r"[^\w\s]", "", (text or "").lower())
-        normalized = " ".join(normalized.split())
+        print("[GHOST] Human confirmation bound to the exact pending action.")
+        self._schedule_approved_action()
+        return True
 
-        affirmative = {
-            "yes", "yeah", "yep", "sure", "ok", "okay",
-            "proceed", "approve", "yes send it", "yes go ahead",
-            "ha",
-            "\u09b9\u09cd\u09af\u09be",
-            "\u099c\u09bf",
-            "\u09a0\u09bf\u0995 \u0986\u099b\u09c7"
-        }
-        negative = {
-            "no", "nope", "nah", "cancel", "stop",
-            "\u09a8\u09be", "\u09a8\u09be\u09b9"
-        }
-
-        print(
-            f"[CONFIRM DEBUG] received={normalized!r}, "
-            f"awaiting={self._awaiting_human_confirmation}, "
-            f"pending={self._pending_human_fingerprint is not None}, "
-            f"approved={self._approved_human_fingerprint is not None}"
-        )
-
-        if not self._awaiting_human_confirmation:
+    def _schedule_approved_action(self):
+        if not self._loop or not self._loop.is_running():
+            self._approved_action_running = False
+            self._pending_human_fingerprint = self._approved_human_fingerprint
+            self._approved_human_fingerprint = None
+            self._awaiting_human_confirmation = True
+            self.ui.write_log(
+                "ERR: Ghost's event loop is not running. "
+                "The action was not executed. You can try confirming again."
+            )
             return
 
-        if normalized in affirmative:
-            self._mark_human_confirmed()
-        elif normalized in negative:
+        coroutine = self._run_approved_pending_action()
+
+        try:
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            running_loop = None
+
+        if running_loop is self._loop:
+            future = self._loop.create_task(coroutine)
+        else:
+            future = asyncio.run_coroutine_threadsafe(
+                coroutine, self._loop
+            )
+
+        def report_failure(done):
+            try:
+                done.result()
+            except Exception as exc:
+                message = (
+                    "Approved action execution failed: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+                print(f"[GHOST] {message}")
+                log(message, level="ERROR")
+                self.ui.write_log(f"ERR: {message}")
+
+        future.add_done_callback(report_failure)
+
+    async def _run_approved_pending_action(self):
+        from types import SimpleNamespace
+
+        try:
+            action = copy.deepcopy(self._pending_human_action)
+            token = self._pending_confirmation_token
+
+            if not action or not token:
+                raise RuntimeError(
+                    "The approved action or confirmation token is missing."
+                )
+
+            replay_args = dict(action["args"])
+            replay_args["confirm"] = True
+            replay_args["confirm_token"] = token
+
+            print(
+                f"[GHOST] Executing locally approved action: "
+                f"{action['name']}"
+            )
+
+            synthetic_call = SimpleNamespace(
+                id="ghost-local-approved-action",
+                name=action["name"],
+                args=replay_args,
+            )
+
+            response = await self._execute_tool(
+                synthetic_call, _approved_replay=True
+            )
+
+            response_data = getattr(response, "response", None) or {}
+
+            if isinstance(response_data, dict):
+                result = response_data.get("result", str(response_data))
+            else:
+                result = str(response_data)
+
+            # Automatically verify a successfully updated Personal Outlook draft.
+            # This is a READ-ONLY operation and does not request another approval.
+            if (
+                action.get("name") == "personal_outlook"
+                and str(action.get("args", {}).get("tool_name", "")).lower()
+                    == "outlook_update_draft"
+            ):
+                try:
+                    import json as _json
+                    from integrations.personal_outlook_mcp import personal_outlook_action
+
+                    update_data = _json.loads(str(result))
+                    draft_id = (
+                        update_data.get("draft_id")
+                        or update_data.get("id")
+                    )
+
+                    if update_data.get("status") == "updated" and draft_id:
+                        verify_args = {
+                            "action": "call",
+                            "tool_name": "outlook_read_message",
+                            "arguments": {
+                                "message_id": draft_id,
+                                "format": "json",
+                                "concise": False,
+                            },
+                        }
+
+                        verify_result = await asyncio.to_thread(
+                            personal_outlook_action,
+                            verify_args,
+                        )
+
+                        result = (
+                            str(result)
+                            + "\n\n--- READ-ONLY DRAFT VERIFICATION ---\n"
+                            + str(verify_result)
+                        )
+                    else:
+                        result = (
+                            str(result)
+                            + "\\n\\nVerification skipped: "
+                            "update success or draft ID was not confirmed."
+                        )
+
+                except Exception as verify_error:
+                    result = (
+                        str(result)
+                        + "\\n\\nRead-only verification failed: "
+                        + type(verify_error).__name__
+                        + ": "
+                        + str(verify_error)
+                    )
+
+            self.ui.write_log(
+                f"GHOST: Approved action result: {result}"
+            )
+
+            # Give concise spoken feedback without reading private
+            # Outlook message or draft contents aloud.
+            self.speak(
+                "The approved action returned a result. "
+                "I've displayed the details in the Ghost log."
+            )
+
+        finally:
+            self._pending_human_action = None
             self._pending_human_fingerprint = None
             self._approved_human_fingerprint = None
             self._pending_confirmation_token = None
             self._awaiting_human_confirmation = False
             self._human_confirmed = False
+            self._approved_action_running = False
+
+    def _handle_confirmation_text(self, text: str):
+        normalized = re.sub(
+            r"[^\w\s]", "", (text or "").lower()
+        )
+        normalized = " ".join(normalized.split())
+
+        affirmative = {
+            "yes", "yeah", "yep", "sure", "ok", "okay",
+            "proceed", "approve", "yes send it", "yes go ahead",
+            "ha", "?????", "??", "??? ???"
+        }
+
+        negative = {
+            "no", "nope", "nah", "cancel", "stop",
+            "??", "???"
+        }
+
+        can_cancel = (
+            self._awaiting_human_confirmation
+            or (
+                self._approved_human_fingerprint is not None
+                and not self._approved_action_running
+            )
+        )
+
+        print(
+            f"[CONFIRM DEBUG] received={normalized!r}, "
+            f"awaiting={self._awaiting_human_confirmation}, "
+            f"pending={self._pending_human_fingerprint is not None}, "
+            f"approved={self._approved_human_fingerprint is not None}, "
+            f"running={self._approved_action_running}"
+        )
+
+        if normalized in affirmative and self._awaiting_human_confirmation:
+            return self._mark_human_confirmed()
+
+        if normalized in negative and can_cancel:
+            self._pending_human_fingerprint = None
+            self._approved_human_fingerprint = None
+            self._pending_confirmation_token = None
+            self._pending_human_action = None
+            self._awaiting_human_confirmation = False
+            self._human_confirmed = False
+
             print("[GHOST] Pending action approval cancelled.")
+            self.ui.write_log(
+                "SYS: Pending action cancelled. Nothing was executed."
+            )
+            return True
+
+        return False
 
     def _on_text_command(self, text: str):
-        self._handle_confirmation_text(text)
+        if self._handle_confirmation_text(text):
+            return
 
         if not self._loop or not self.session or not self._send_lock:
             return
@@ -1856,7 +2104,24 @@ class GHOSTLive:
             async with self._send_lock:
                 await self.session.send_realtime_input(text=text)
 
-        asyncio.run_coroutine_threadsafe(_send(), self._loop)
+        future = asyncio.run_coroutine_threadsafe(_send(), self._loop)
+
+        def _report_send_error(done):
+            try:
+                done.result()
+            except Exception as exc:
+                message = (
+                    f"Gemini text-send failed: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+                print(f"[GHOST] ERROR: {message}")
+                log(message, level="ERROR")
+                try:
+                    self.ui.write_log(f"ERR: {message}")
+                except Exception:
+                    pass
+
+        future.add_done_callback(_report_send_error)
 
     def set_speaking(self, value: bool):
         with self._speaking_lock:
@@ -2435,7 +2700,7 @@ class GHOSTLive:
             ),
         )
 
-    async def _execute_tool(self, fc) -> "types.FunctionResponse": # type: ignore
+    async def _execute_tool(self, fc, _approved_replay=False) -> "types.FunctionResponse": # type: ignore
         name = fc.name
         args = dict(fc.args or {})
 
@@ -2512,18 +2777,27 @@ class GHOSTLive:
 
         result = "Done."
 
-        # â”€â”€ Loop guard: stop identical-arg / ping-pong tool loops in live mode â”€â”€
-        blocked = self.loop_guard.check(name, args)
-        if blocked:
-            print(f"[GHOST] ðŸ›‘ {name} blocked by loop guard")
-            if not self.ui.muted:
-                self.ui.set_state("LISTENING")
+        if self._approved_action_running and not _approved_replay:
             return types.FunctionResponse(
                 id=fc.id, name=name,
-                response={"result": blocked}
+                response={
+                    "result": "An explicitly approved action is already executing. Do not retry it."
+                }
             )
 
-        # â”€â”€ Safety gate: high-risk actions need explicit user confirmation â”€â”€
+        # â”€â”€ Loop guard: stop identical-arg / ping-pong tool loops in live mode â”€â”€
+        if not _approved_replay:
+            blocked = self.loop_guard.check(name, args)
+            if blocked:
+                print(f"[GHOST] ðŸ›‘ {name} blocked by loop guard")
+                if not self.ui.muted:
+                    self.ui.set_state("LISTENING")
+                return types.FunctionResponse(
+                    id=fc.id, name=name,
+                    response={"result": blocked}
+                )
+
+            # â”€â”€ Safety gate: high-risk actions need explicit user confirmation â”€â”€
         from safety import (
             needs_confirmation, describe, CONFIRM_MESSAGE,
             CONFIRM_PARAM, CONFIRM_TOKEN_PARAM, issue_confirmation_token, sanitize,
@@ -2572,6 +2846,7 @@ class GHOSTLive:
                 # Exact human approval and one-time token validated.
                 self._approved_human_fingerprint = None
                 self._pending_confirmation_token = None
+                self._pending_human_action = None
                 self._human_confirmed = False
 
             else:
@@ -2589,6 +2864,10 @@ class GHOSTLive:
                     token = issue_confirmation_token(name, args)
                     self._pending_confirmation_token = token
                     self._pending_human_fingerprint = fingerprint
+                    self._pending_human_action = {
+                        "name": name,
+                        "args": copy.deepcopy(args),
+                    }
                     self._approved_human_fingerprint = None
                     self._human_confirmed = False
                     self._awaiting_human_confirmation = True
@@ -3170,18 +3449,47 @@ class GHOSTLive:
             while True:
                 async for response in self.session.receive():
 
+                    sc_debug = getattr(response, "server_content", None)
+                    model_debug = getattr(sc_debug, "model_turn", None)
+                    parts_debug = getattr(model_debug, "parts", None) or []
+
+                    print(
+                        "[GHOST RECEIVE DEBUG] "
+                        f"server_content={sc_debug is not None} "
+                        f"parts={len(parts_debug)} "
+                        f"part_text={any(bool((getattr(p, 'text', '') or '').strip()) for p in parts_debug)} "
+                        f"output_transcription={bool(getattr(getattr(sc_debug, 'output_transcription', None), 'text', None))} "
+                        f"turn_complete={bool(getattr(sc_debug, 'turn_complete', False))} "
+                        f"tool_call={getattr(response, 'tool_call', None) is not None}"
+                    )
+
                     if response.data and not getattr(self.ui, "silent_mode", False):
                         self.audio_in_queue.put_nowait(response.data)
 
                     if response.server_content:
                         sc = response.server_content
 
-                        if sc.output_transcription and sc.output_transcription.text:
+                        # Capture generated speech transcription.
+                        output_transcription = getattr(sc, "output_transcription", None)
+                        transcription_text = (
+                            getattr(output_transcription, "text", "") or ""
+                        ).strip()
+
+                        if transcription_text:
                             if not getattr(self.ui, "silent_mode", False):
                                 self.set_speaking(True)
-                            txt = sc.output_transcription.text.strip()
-                            if txt:
-                                out_buf.append(txt)
+                            out_buf.append(transcription_text)
+
+                        # Also capture ordinary text parts when Gemini supplies
+                        # them instead of audio transcription.
+                        model_turn = getattr(sc, "model_turn", None)
+                        model_parts = getattr(model_turn, "parts", None) or []
+
+                        if not transcription_text:
+                            for part in model_parts:
+                                part_text = (getattr(part, "text", "") or "").strip()
+                                if part_text:
+                                    out_buf.append(part_text)
 
                         if sc.input_transcription and sc.input_transcription.text:
                             txt = sc.input_transcription.text.strip()

@@ -158,3 +158,41 @@ class SanitizeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+# PERSONAL_OUTLOOK_DRAFT_SAFETY_REGRESSION_TESTS
+class PersonalOutlookDraftSafetyRegressionTest(unittest.TestCase):
+    def test_listing_and_reading_drafts_are_low_risk(self):
+        from safety import classify, Risk
+
+        for tool_name in (
+            "outlook_list_drafts",
+            "outlook_read_message",
+        ):
+            with self.subTest(tool=tool_name):
+                self.assertEqual(
+                    classify(
+                        "personal_outlook",
+                        {"action": "call", "tool_name": tool_name, "arguments": {}},
+                    ),
+                    Risk.LOW,
+                )
+
+    def test_all_draft_mutations_are_high_risk(self):
+        from safety import classify, Risk
+
+        for tool_name in (
+            "outlook_create_draft",
+            "outlook_update_draft",
+            "outlook_send_draft",
+            "outlook_delete_draft",
+            "outlook_attach_to_draft",
+            "outlook_remove_draft_attachment",
+        ):
+            with self.subTest(tool=tool_name):
+                self.assertEqual(
+                    classify(
+                        "personal_outlook",
+                        {"action": "call", "tool_name": tool_name, "arguments": {}},
+                    ),
+                    Risk.HIGH,
+                )

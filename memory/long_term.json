@@ -169,6 +169,10 @@
     "conversation_2026-11-17_17-04": {
       "value": "User: \nGHOST: I've gathered messages from your Inbox and Ghost_Test_Folder_Renamed, consolidated, sorted by newest, and displayed the latest three. Here are the results: Folder: Inbox, Subject: URGENT: Project Review Required – Deadline Test, Sender: sefat ahmed akkhor (sefatahmed3674@gmail.com), Received: 2026-11-16 04:21:31 UTC; Folder: Ghost_Test_Folder_Renamed, Subject: Test 1, Sender: sefat a",
       "updated": "2026-11-17"
+    },
+    "conversation_2026-11-18_13-20": {
+      "value": "Call DIRECTLY — never web_search first, never agent_task.\n\nLANGUAGE:\n- Respond in the same language the user spoke.\n- Always extract tool parameters in English.\n- Example: \"İstanbul hava durumu?\" → weather_report city:\"Istanbul\", reply in Turkish.\n\nTOOL SELECTION:\n- computer_settings → volume, brightness, screen, refresh, scroll, minimize, maximize, \n  close, screenshot, lock, restart, shutdown, w",
+      "updated": "2026-11-18"
     }
   }
 }

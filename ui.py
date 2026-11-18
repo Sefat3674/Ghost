@@ -472,7 +472,10 @@ class GHOSTUI:
         return "break"
 
     def _on_input_submit(self, event=None):
-        text = self._get_input().strip()
+        raw_text = self._get_input()
+        print(f"[UI INPUT DEBUG] raw={raw_text!r}")
+        text = raw_text.strip()
+        print(f"[UI INPUT DEBUG] submitted={text!r}")
         if not text:
             return "break"
         self._set_input("")

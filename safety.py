@@ -391,8 +391,20 @@ def describe(name: str, args: dict | None) -> str:
         action = str(args.get("action", "")).lower().strip()
         if action == "preview_move":
             return "prepare a read-only Personal Outlook move preview"
+
         tool_name = str(args.get("tool_name", "unknown Outlook operation"))
-        return f"perform Personal Outlook operation: {tool_name}"
+        draft_descriptions = {
+            "outlook_create_draft": "create a Personal Outlook draft",
+            "outlook_update_draft": "revise the selected Personal Outlook draft",
+            "outlook_send_draft": "send the selected Personal Outlook draft",
+            "outlook_delete_draft": "delete the selected Personal Outlook draft",
+            "outlook_attach_to_draft": "attach a file to a Personal Outlook draft",
+            "outlook_remove_draft_attachment": "remove an attachment from a Personal Outlook draft",
+        }
+        return draft_descriptions.get(
+            tool_name,
+            f"perform Personal Outlook operation: {tool_name}",
+        )
 
     if name == "file_controller":
         target = args.get("name") or args.get("path") or "item"
