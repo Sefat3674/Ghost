@@ -1,5 +1,5 @@
-"""
-safety.py — centralized risk classification + confirmation gate.
+﻿"""
+safety.py â€” centralized risk classification + confirmation gate.
 
 Single source of truth for:
   * which tools are risky (LOW / MEDIUM / HIGH)
@@ -22,12 +22,12 @@ from typing import Any
 
 
 class Risk(IntEnum):
-    LOW = 0      # read-only / harmless — never requires confirmation
+    LOW = 0      # read-only / harmless â€” never requires confirmation
     MEDIUM = 1   # can change state, but reversible / low impact
-    HIGH = 2     # destructive, irreversible, or arbitrary code — MUST confirm
+    HIGH = 2     # destructive, irreversible, or arbitrary code â€” MUST confirm
 
 
-# ── Per-tool base risk ────────────────────────────────────────────────────────
+# â”€â”€ Per-tool base risk â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Default risk for each tool when it has no action-specific override below.
 TOOL_RISK = {
     # Read-only / informational
@@ -49,7 +49,7 @@ TOOL_RISK = {
     "create_spreadsheet": Risk.LOW,
     "google_auth_status": Risk.LOW,
 
-    # Style / memory / personality — local, reversible
+    # Style / memory / personality â€” local, reversible
     "set_mode":          Risk.LOW,
     "set_voice":         Risk.LOW,
     "set_mood":          Risk.LOW,
@@ -168,7 +168,7 @@ PERSONAL_OUTLOOK_HIGH_RISK = {
     "outlook_delete_folder",
     "outlook_batch_triage",
 }
-# ── Action-specific risk overrides ────────────────────────────────────────────
+# â”€â”€ Action-specific risk overrides â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # (tool_name, action) -> Risk. High-impact / irreversible actions are HIGH.
 # `None` as the action key means "any other action" for that tool.
 _ACTION_RISK = {
@@ -251,7 +251,7 @@ _ACTION_RISK = {
     },
 }
 
-# Params that may carry the user's explicit "yes" — the model must set this to
+# Params that may carry the user's explicit "yes" â€” the model must set this to
 # True after the user verbally approves a high-risk action.
 CONFIRM_PARAM = "confirm"
 
@@ -263,13 +263,13 @@ CONFIRM_TOKEN_PARAM = "confirm_token"
 # user's consent. The model must relay it, wait for an explicit yes, then
 # re-invoke the tool with confirm=true.
 CONFIRM_MESSAGE = (
-    "⛔ This action requires your permission: {desc}. "
+    "â›” This action requires your permission: {desc}. "
     "I must not run it without the user's explicit approval. "
     "Ask the user: 'May I {desc}?' and WAIT for an explicit yes or no. "
     "Only call this tool again with {param}=true after the user says yes."
 )
 
-# ── One-time confirmation tokens (technical enforcement) ─────────────────────
+# â”€â”€ One-time confirmation tokens (technical enforcement) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # confirm=true is NOT enough on its own: a HIGH-risk call must present a token
 # that was issued by this module when the call was first blocked. The model
 # cannot fabricate tokens (they are secrets), and each token is single-use and
@@ -347,6 +347,11 @@ def classify(name: str, args: dict | None) -> Risk:
         if action == "call":
             tool_name = str(args.get("tool_name", "")).strip()
 
+            # Creating a draft does not send an email.
+            # Sending the saved draft remains HIGH risk.
+            if tool_name == "outlook_create_draft":
+                return Risk.LOW
+
             if tool_name in PERSONAL_OUTLOOK_READ_ONLY:
                 return Risk.LOW
 
@@ -393,10 +398,33 @@ def describe(name: str, args: dict | None) -> str:
             return "prepare a read-only Personal Outlook move preview"
 
         tool_name = str(args.get("tool_name", "unknown Outlook operation"))
+
+        # Identify the exact existing draft before requesting send approval.
+        if tool_name == "outlook_send_draft":
+            tool_args = args.get("arguments")
+            if not isinstance(tool_args, dict):
+                tool_args = {}
+
+            draft_id = str(tool_args.get("draft_id", "")).strip()
+
+            if draft_id:
+                return (
+                    "send the selected Personal Outlook draft "
+                    f"(draft ID: {draft_id})"
+                )
+
+            return (
+                "send the selected Personal Outlook draft "
+                "(draft ID missing)"
+            )
+
         draft_descriptions = {
+            "outlook_send_message": "send a new Personal Outlook email",
+            "outlook_send_draft": "send the selected Personal Outlook draft",
+            "outlook_reply": "send a reply to a Personal Outlook email",
+            "outlook_forward": "forward a Personal Outlook email",
             "outlook_create_draft": "create a Personal Outlook draft",
             "outlook_update_draft": "revise the selected Personal Outlook draft",
-            "outlook_send_draft": "send the selected Personal Outlook draft",
             "outlook_delete_draft": "delete the selected Personal Outlook draft",
             "outlook_attach_to_draft": "attach a file to a Personal Outlook draft",
             "outlook_remove_draft_attachment": "remove an attachment from a Personal Outlook draft",
@@ -453,7 +481,7 @@ def describe(name: str, args: dict | None) -> str:
     return f"{name} ({brief})" if brief else name
 
 
-# ── Secret redaction for logs / UI / remote ──────────────────────────────────
+# â”€â”€ Secret redaction for logs / UI / remote â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 _SECRET_KEYS = {
     "api_key", "api_key_id", "apikey", "token", "access_token", "auth_token",
     "password", "passwd", "secret", "client_secret", "code", "key",

@@ -7,6 +7,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -132,6 +133,55 @@ class ConfirmationTokenTest(unittest.TestCase):
         )
 
 
+    def test_expired_token_is_rejected(self):
+        # Simulate a token that is 11 seconds old with a 10-second TTL.
+        with patch.object(safety, "_TOKEN_TTL_SECONDS", 10):
+            with patch.object(
+                safety.time, "monotonic",
+                side_effect=[100.0, 111.0]
+            ):
+                token = safety.issue_confirmation_token(
+                    "cmd_control", {"command": "dir"}
+                )
+
+                self.assertFalse(
+                    safety.redeem_confirmation_token(
+                        "cmd_control", {"command": "dir"}, token
+                    )
+                )
+
+
+    def test_concurrent_token_redemption_succeeds_exactly_once(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+
+        token = safety.issue_confirmation_token(
+            "cmd_control",
+            {"command": "dir"},
+        )
+
+        barrier = Barrier(2)
+
+        def redeem():
+            barrier.wait(timeout=5)
+            return safety.redeem_confirmation_token(
+                "cmd_control",
+                {"command": "dir"},
+                token,
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(redeem),
+                executor.submit(redeem),
+            ]
+            results = [future.result(timeout=10) for future in futures]
+
+        self.assertEqual(results.count(True), 1)
+        self.assertEqual(results.count(False), 1)
+
+
+
 class DescribeTest(unittest.TestCase):
 
     def test_delete_description(self):
@@ -141,6 +191,23 @@ class DescribeTest(unittest.TestCase):
     def test_command_description(self):
         desc = safety.describe("cmd_control", {"command": "dir"})
         self.assertIn("dir", desc)
+
+    def test_outlook_send_draft_description_includes_exact_draft_id(self):
+        draft_id = "AQMk_TEST_EXACT_DRAFT_ID_123"
+
+        desc = safety.describe(
+            "personal_outlook",
+            {
+                "action": "call",
+                "tool_name": "outlook_send_draft",
+                "arguments": {
+                    "draft_id": draft_id,
+                },
+            },
+        )
+
+        self.assertIn("send the selected Personal Outlook draft", desc)
+        self.assertIn(draft_id, desc)
 
 
 class SanitizeTest(unittest.TestCase):
@@ -177,11 +244,25 @@ class PersonalOutlookDraftSafetyRegressionTest(unittest.TestCase):
                     Risk.LOW,
                 )
 
-    def test_all_draft_mutations_are_high_risk(self):
+    def test_creating_draft_is_low_risk(self):
+        from safety import classify, Risk
+
+        self.assertEqual(
+            classify(
+                "personal_outlook",
+                {
+                    "action": "call",
+                    "tool_name": "outlook_create_draft",
+                    "arguments": {},
+                },
+            ),
+            Risk.LOW,
+        )
+
+    def test_other_draft_mutations_are_high_risk(self):
         from safety import classify, Risk
 
         for tool_name in (
-            "outlook_create_draft",
             "outlook_update_draft",
             "outlook_send_draft",
             "outlook_delete_draft",

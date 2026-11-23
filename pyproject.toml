@@ -72,3 +72,8 @@ test = [
 
 [project.scripts]
 ghost = "main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "--import-mode=importlib --ignore=tests/test_smart_manufacturing.py"

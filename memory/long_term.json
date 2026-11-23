@@ -1,8 +1,12 @@
 {
   "identity": {
     "name": {
-      "value": "Sefat Ahmed",
-      "updated": "2026-11-17"
+      "value": "Sifat",
+      "updated": "2026-11-23"
+    },
+    "email": {
+      "value": "Sifat Ahmed 3674@gmail.com",
+      "updated": "2026-11-23"
     }
   },
   "preferences": {
@@ -43,6 +47,10 @@
     "dot_net_projects": {
       "value": "Long-term .NET projects",
       "updated": "2026-11-16"
+    },
+    "planers_and_group": {
+      "value": "Working on Planers & Group email",
+      "updated": "2026-11-23"
     }
   },
   "relationships": {
@@ -173,6 +181,26 @@
     "conversation_2026-11-18_13-20": {
       "value": "Call DIRECTLY — never web_search first, never agent_task.\n\nLANGUAGE:\n- Respond in the same language the user spoke.\n- Always extract tool parameters in English.\n- Example: \"İstanbul hava durumu?\" → weather_report city:\"Istanbul\", reply in Turkish.\n\nTOOL SELECTION:\n- computer_settings → volume, brightness, screen, refresh, scroll, minimize, maximize, \n  close, screenshot, lock, restart, shutdown, w",
       "updated": "2026-11-18"
+    },
+    "conversation_2026-11-21_09-36": {
+      "value": "User: \nGHOST: Greetings. How can I assist you today?\nUser: \nGHOST: You have one recent email in your inbox. It's from \"sefat ahmed akkhor\" with the subject \"URGENT: Project Review Required – Deadline Test\".\nUser: \nGHOST: The email content is a test email for the GHOST Outlook Priority Intelligence system, asking for a project review and confirmation by November 17, 2026. Best regard.\nUser: \nGHOST:",
+      "updated": "2026-11-21"
+    },
+    "email_recipient": {
+      "value": "Saf Ahmed 3674@gmail.com",
+      "updated": "2026-11-23"
+    },
+    "conversation_2026-11-23_12-22": {
+      "value": "User: Hey, hello.\nGHOST: Hello. How can I assist you?\nUser: Bangla te kotha bolo.\nGHOST: ঠিক আছে, আমি বাংলায় কথা বলছি। আপনাকে কীভাবে সাহায্য করতে পারি?\nUser: আচ্ছা তুমি হচ্ছে একটা ইমেইল ড্রাফট করবা।\nGHOST: ঠিক আছে, আমি একটি ইমেল ড্রাফট করতে পারি। ইমেলটি কাকে পাঠাতে হবে, বিষয় বা সাবজেক্ট কী এবং মূল বার্তাটি কী হবে, তা দয়া করে জানান।\nUser: अच्छा, ईमेल तो भेजना होगा। सेफ अहमद 3674@gmail.com\nGHOST: ধন",
+      "updated": "2026-11-23"
+    },
+    "conversation_2026-11-23_12-25": {
+      "value": "User: Hello.\nGHOST: Hello. How can I assist you today?\nUser: अच्छा, तुम ही एक मेल भेजना होगा तुम्हें। आउटलुक से के\nGHOST: অবশ্যই, আমি আপনাকে একটি ইমেল পাঠাতে সাহায্য করতে পারি। আপনাকে কাকে ইমেলটি পাঠাতে হবে? সাবজেক্ট কি এবং মেসেজে আপনি কী লিখতে চান তা আমায় জানান।\nUser: अच्छा, तुम फर्स्ट में आउटलुक में घुसो।\nGHOST: আউটলুকে ঢোকার জন্য আমার নির্দিষ্ট কোন অ্যাকশনের প্রয়োজন হয় না, আমি সরাসরি ইমেল ক্র",
+      "updated": "2026-11-23"
+    },
+    "conversation_2026-11-23_12-53": {
+      "value": "User: É, alô. Som tá alto, né?\nGHOST: Sim, o volume do sistema está alto. Gostaria que eu diminuísse? Ou tem algum valor específico em mente?\nUser: \nGHOST: Rascunho de e-mail criado. Para: sefatahmed3674@gmail.com. Assunto: Kaizumi Outlook Test. Corpo: This is a test draft from Kaizumi. Posso enviar?\nUser: \nGHOST: I'll switch to English now. The draft is ready. To: sefatahmed3674@gmail.com. Subjec",
+      "updated": "2026-11-23"
     }
   }
 }

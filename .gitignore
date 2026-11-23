@@ -40,3 +40,34 @@ config/guardian.json
 config/smart_home.json
 
 .env
+
+# Additional local environments
+.venv-*/
+.venv_python315_backup/
+
+# Local backups and diagnostic artifacts
+*.bak
+*.backup
+*.before-*
+*.before_*
+*.guard-backup
+*.confirmation-backup
+*_inspection.txt
+*_inspect.txt
+*_details.txt
+
+# Local backup variants
+*.backup*
+*.confirmation-backup
+*.outlook-guard-backup
+
+# Local diagnostic exports
+*_inspection.txt
+*_inspect.txt
+*_details.txt
+outlook_telegram_handlers.txt
+outlook_source_code.txt
+test_full_suite_diagnostic.txt
+
+# Accidental terminal-output files
+t *

@@ -13,6 +13,9 @@ PYTHON312 = Path(r"E:\outlook-mcp-venv\Scripts\python.exe")
 
 REQUEST_TIMEOUT = 180
 
+# Private capability used only by the validated main dispatcher.
+_PERSONAL_OUTLOOK_APPROVAL_CAPABILITY = object()
+
 
 class PersonalOutlookBridge:
     def __init__(self):
@@ -134,9 +137,31 @@ class PersonalOutlookBridge:
             indent=2,
         )
 
-    def call_tool(self, tool_name, arguments):
+    def call_tool(
+        self,
+        tool_name,
+        arguments,
+        *,
+        _approval_capability=None,
+    ):
         if not isinstance(arguments, dict):
             raise ValueError("arguments must be a dictionary")
+
+        from safety import classify, Risk
+
+        safety_args = {
+            "action": "call",
+            "tool_name": str(tool_name).strip(),
+            "arguments": arguments,
+        }
+
+        if (
+            classify("personal_outlook", safety_args) == Risk.HIGH
+            and _approval_capability is not _PERSONAL_OUTLOOK_APPROVAL_CAPABILITY
+        ):
+            raise PermissionError(
+                "Blocked: Personal Outlook mutation requires explicit human approval."
+            )
 
         response = self._request({
             "action": "call",
@@ -388,7 +413,64 @@ def _preview_move(query="subject:URGENT",
     }
 
 
-def personal_outlook_action(parameters=None, **kwargs):
+
+
+def _list_all_drafts(base_arguments):
+    """Fetch every Outlook draft page using the MCP next_cursor field."""
+    page_size = base_arguments.get("count", 25)
+
+    if isinstance(page_size, bool) or not isinstance(page_size, int) or page_size < 1:
+        raise ValueError("Draft page size must be a positive integer.")
+
+    collected = []
+    seen_cursors = set()
+    cursor = base_arguments.get("cursor")
+    pages_fetched = 0
+    last_data = {}
+
+    for _ in range(100):
+        arguments = dict(base_arguments)
+        arguments["count"] = page_size
+
+        if cursor:
+            arguments["cursor"] = cursor
+        else:
+            arguments.pop("cursor", None)
+
+        raw = personal_outlook.call_tool("outlook_list_drafts", arguments)
+        data = _preview_decode(raw, "Outlook drafts")
+
+        items = data.get("messages")
+        if not isinstance(items, list):
+            raise ValueError("Outlook drafts: response has no valid messages list.")
+
+        collected.extend(item for item in items if isinstance(item, dict))
+        pages_fetched += 1
+        last_data = data
+
+        next_cursor = data.get("next_cursor")
+        if not next_cursor:
+            break
+
+        if next_cursor in seen_cursors:
+            raise ValueError("Outlook drafts: repeated pagination cursor.")
+
+        seen_cursors.add(next_cursor)
+        cursor = next_cursor
+    else:
+        raise ValueError("Outlook drafts: stopped after 100 pages for safety.")
+
+    result = dict(last_data)
+    result["messages"] = collected
+    result["count"] = len(collected)
+    result["total_count"] = len(collected)
+    result["pages_fetched"] = pages_fetched
+    result["next_cursor"] = None
+    result["has_more"] = False
+
+    return json.dumps(result, ensure_ascii=False)
+
+def _personal_outlook_action_impl(parameters=None, *, _approval_capability=None, **kwargs):
     args = parameters if isinstance(parameters, dict) else {}
     action = str(args.get("action", "")).strip().lower()
 
@@ -414,9 +496,16 @@ def personal_outlook_action(parameters=None, **kwargs):
                 return "Please provide tool_name."
 
             arguments = args.get("arguments", {})
+            if not isinstance(arguments, dict):
+                raise ValueError("arguments must be a dictionary")
+
+            if tool_name == "outlook_list_drafts":
+                return _list_all_drafts(arguments)
+
             return personal_outlook.call_tool(
                 tool_name,
                 arguments,
+                _approval_capability=_approval_capability,
             )
 
         return "Unknown action. Use list_tools, call, or preview_move."
@@ -426,6 +515,22 @@ def personal_outlook_action(parameters=None, **kwargs):
             f"Personal Outlook error: "
             f"{type(exc).__name__}: {exc}"
         )
+
+
+def personal_outlook_action(parameters=None, **kwargs):
+    """Public entry point. HIGH-risk mutations are denied."""
+    return _personal_outlook_action_impl(parameters, **kwargs)
+
+
+def _personal_outlook_action_approved(parameters, capability):
+    """Private entry point for the validated main dispatcher."""
+    if capability is not _PERSONAL_OUTLOOK_APPROVAL_CAPABILITY:
+        raise PermissionError("Invalid Outlook approval capability.")
+
+    return _personal_outlook_action_impl(
+        parameters,
+        _approval_capability=capability,
+    )
 
 
 atexit.register(personal_outlook.shutdown)
