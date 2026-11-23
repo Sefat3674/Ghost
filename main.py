@@ -1622,7 +1622,17 @@ TOOL_DECLARATIONS = [
                 },
                 "arguments": {
                     "type": "OBJECT",
-                    "description": "Arguments matching the discovered MCP schema."
+                    "description": (
+                        "Arguments matching the selected MCP tool schema. "
+                        "For outlook_search_mail specifically: "
+                        "query is a required STRING search query; "
+                        "folder is an optional STRING folder name such as sentitems; "
+                        "count is an optional INTEGER page size; "
+                        "concise is an optional BOOLEAN. "
+                        "Pass these fields inside arguments, not as top-level fields. "
+                        "Use the exact requested folder and verify exact subject "
+                        "matches from returned messages."
+                    )
                 },
                 "query": {
                     "type": "STRING",
@@ -3202,6 +3212,19 @@ class GHOSTLive:
         fingerprint = _fingerprint(name, args)
         requires_confirmation = needs_confirmation(name, args)
 
+        approved_match = (
+            self._approved_human_fingerprint == fingerprint
+        )
+        print(
+            "[GHOST APPROVAL DIAG] "
+            f"replay={bool(_approved_replay)} "
+            f"approved_fingerprint_present="
+            f"{self._approved_human_fingerprint is not None} "
+            f"fingerprint_match={approved_match} "
+            f"pending_fingerprint_present="
+            f"{self._pending_human_fingerprint is not None}"
+        )
+
         # Never let approval for one action authorize a different action.
         if (
             self._approved_human_fingerprint is not None
@@ -3226,9 +3249,17 @@ class GHOSTLive:
                 if not confirm_token:
                     confirm_token = self._pending_confirmation_token or ""
 
-                if needs_confirmation(
+                token_rejected = needs_confirmation(
                     name, args, confirm=True, confirm_token=confirm_token
-                ):
+                )
+                print(
+                    "[GHOST APPROVAL DIAG] "
+                    f"replay={bool(_approved_replay)} "
+                    f"confirm_flag={confirm} "
+                    f"confirm_token_present={bool(confirm_token)} "
+                    f"token_valid={not token_rejected}"
+                )
+                if token_rejected:
                     print(f"[GHOST] {name} rejected - confirmation token invalid or expired.")
                     return types.FunctionResponse(
                         id=fc.id,
