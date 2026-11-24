@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import copy
 import threading
 import json
@@ -1044,7 +1044,7 @@ TOOL_DECLARATIONS = [
             "preview_bulk_organize, bulk_organize, folders, create_folder, "
             "rename_folder, delete_folder, read_folder, calendar, contacts, "
             "attachments, profile, summarize, intelligence, draft_reply, "
-            "draft_grouped_reply, show_draft, revise_reply, send_reply."
+            "draft_grouped_reply, show_draft, revise_reply, send_reply, filter, thread, create_draft, update_draft, list_drafts, send_draft, delete_draft, send_email, reply, forward, mark_read, mark_unread, flag, unflag, complete_flag, set_importance, set_categories, archive, delete_email, permanent_delete, event, create_event, update_event, delete_event, respond_event, free_slots, create_contact, update_contact, delete_contact, download_attachment, attach_file, categories, create_category, auto_reply, set_auto_reply, login, logout, status. Anything that sends, deletes or changes data needs confirm=True after the user approves the exact details."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -1058,7 +1058,7 @@ TOOL_DECLARATIONS = [
                         "delete_folder | read_folder | calendar | contacts | "
                         "attachments | profile | summarize | intelligence | "
                         "draft_reply | draft_grouped_reply | show_draft | "
-                        "revise_reply | send_reply"
+                        "revise_reply | send_reply | filter | thread | create_draft | update_draft | list_drafts | send_draft | delete_draft | send_email | reply | forward | mark_read | mark_unread | flag | unflag | complete_flag | set_importance | set_categories | archive | delete_email | permanent_delete | event | create_event | update_event | delete_event | respond_event | free_slots | create_contact | update_contact | delete_contact | download_attachment | attach_file | categories | create_category | auto_reply | set_auto_reply | login | logout | status"
                     )
                 },
                 "query": {
@@ -1142,6 +1142,146 @@ TOOL_DECLARATIONS = [
                 "local_only": {
                     "type": "BOOLEAN",
                     "description": "Use the local grouped-reply generator instead of Gemini."
+                },
+                "to": {
+                    "type": "STRING",
+                    "description": 'Recipient email address(es), comma separated (send_email, create_draft, forward).'
+                },
+                "cc": {
+                    "type": "STRING",
+                    "description": 'Cc address(es), comma separated.'
+                },
+                "bcc": {
+                    "type": "STRING",
+                    "description": 'Bcc address(es), comma separated.'
+                },
+                "subject": {
+                    "type": "STRING",
+                    "description": 'Email or event subject.'
+                },
+                "body": {
+                    "type": "STRING",
+                    "description": 'Email or event body text.'
+                },
+                "comment": {
+                    "type": "STRING",
+                    "description": 'Reply/forward text for reply and forward, or response note for respond_event.'
+                },
+                "html": {
+                    "type": "BOOLEAN",
+                    "description": 'Treat body as HTML.'
+                },
+                "reply_all": {
+                    "type": "BOOLEAN",
+                    "description": 'Reply to everyone on the thread.'
+                },
+                "folder": {
+                    "type": "STRING",
+                    "description": 'Folder name or well-known name: inbox, sent, drafts, deleted, junk, archive.'
+                },
+                "conversation_id": {
+                    "type": "STRING",
+                    "description": 'Conversation ID for thread.'
+                },
+                "sender": {
+                    "type": "STRING",
+                    "description": 'Sender address for filter.'
+                },
+                "since": {
+                    "type": "STRING",
+                    "description": 'ISO-8601 start datetime for filter.'
+                },
+                "until": {
+                    "type": "STRING",
+                    "description": 'ISO-8601 end datetime for filter.'
+                },
+                "unread_only": {
+                    "type": "BOOLEAN",
+                    "description": 'Only unread messages (filter).'
+                },
+                "importance": {
+                    "type": "STRING",
+                    "description": 'low | normal | high.'
+                },
+                "categories": {
+                    "type": "STRING",
+                    "description": 'Comma separated category names for set_categories.'
+                },
+                "event_id": {
+                    "type": "STRING",
+                    "description": 'Calendar event ID.'
+                },
+                "start": {
+                    "type": "STRING",
+                    "description": 'ISO-8601 start datetime (events, calendar range, auto-reply).'
+                },
+                "end": {
+                    "type": "STRING",
+                    "description": 'ISO-8601 end datetime.'
+                },
+                "timezone": {
+                    "type": "STRING",
+                    "description": 'IANA/Windows timezone name, e.g. Asia/Dhaka.'
+                },
+                "attendees": {
+                    "type": "STRING",
+                    "description": 'Attendee emails, comma separated. Sends invitations.'
+                },
+                "location": {
+                    "type": "STRING",
+                    "description": 'Event location.'
+                },
+                "online_meeting": {
+                    "type": "BOOLEAN",
+                    "description": 'Add a Teams meeting (work/school accounts).'
+                },
+                "response": {
+                    "type": "STRING",
+                    "description": 'accept | tentative | decline for respond_event.'
+                },
+                "days": {
+                    "type": "INTEGER",
+                    "description": 'Days ahead for calendar or free_slots.'
+                },
+                "duration_minutes": {
+                    "type": "INTEGER",
+                    "description": 'Meeting length for free_slots.'
+                },
+                "contact_id": {
+                    "type": "STRING",
+                    "description": 'Contact ID.'
+                },
+                "given_name": {
+                    "type": "STRING",
+                    "description": 'Contact first name.'
+                },
+                "surname": {
+                    "type": "STRING",
+                    "description": 'Contact last name.'
+                },
+                "email": {
+                    "type": "STRING",
+                    "description": 'Contact email address.'
+                },
+                "attachment_id": {
+                    "type": "STRING",
+                    "description": 'Attachment ID for download_attachment.'
+                },
+                "file_path": {
+                    "type": "STRING",
+                    "description": 'Local file to attach to a draft (attach_file).'
+                },
+                "parent_folder": {
+                    "type": "STRING",
+                    "description": 'Parent folder name for create_folder.'
+                },
+                "message": {
+                    "type": "STRING",
+                    "description": 'Auto-reply message text.'
+                },
+                "enabled": {
+                    "type": "BOOLEAN",
+                    "description": 'Turn automatic replies on or off.'
                 }
             },
             "required": []
@@ -1624,15 +1764,47 @@ TOOL_DECLARATIONS = [
                     "type": "OBJECT",
                     "description": (
                         "Arguments matching the selected MCP tool schema. "
-                        "For outlook_search_mail specifically: "
-                        "query is a required STRING search query; "
-                        "folder is an optional STRING folder name such as sentitems; "
-                        "count is an optional INTEGER page size; "
-                        "concise is an optional BOOLEAN. "
-                        "Pass these fields inside arguments, not as top-level fields. "
-                        "Use the exact requested folder and verify exact subject "
-                        "matches from returned messages."
-                    )
+                        "For outlook_create_draft use to, subject, and body; "
+                        "cc and bcc are optional recipient lists. "
+                        "For outlook_send_draft, draft_id is required. "
+                        "For outlook_search_mail use query; folder, count, "
+                        "and concise are optional. Pass all fields inside "
+                        "arguments, not as top-level fields. Use only exact "
+                        "IDs returned by Outlook tools."
+                    ),
+                    "properties": {
+                        "draft_id": {
+                            "type": "STRING",
+                            "description": "Exact existing Outlook draft ID; required for outlook_send_draft."
+                        },
+                        "to": {
+                            "type": "ARRAY",
+                            "items": {"type": "STRING"}
+                        },
+                        "cc": {
+                            "type": "ARRAY",
+                            "items": {"type": "STRING"}
+                        },
+                        "bcc": {
+                            "type": "ARRAY",
+                            "items": {"type": "STRING"}
+                        },
+                        "subject": {"type": "STRING"},
+                        "body": {"type": "STRING"},
+                        "is_html": {"type": "BOOLEAN"},
+                        "query": {"type": "STRING"},
+                        "folder": {"type": "STRING"},
+                        "count": {"type": "INTEGER"},
+                        "concise": {"type": "BOOLEAN"},
+                        "message_id": {
+                            "type": "STRING",
+                            "description": "Exact Outlook message ID returned by an Outlook tool."
+                        },
+                        "format": {
+                            "type": "STRING",
+                            "description": "Message read format, such as full or metadata."
+                        }
+                    }
                 },
                 "query": {
                     "type": "STRING",
@@ -1988,19 +2160,47 @@ class GHOSTLive:
             )
             return
 
-        coroutine = self._run_approved_pending_action()
+        coroutine = None
 
         try:
-            running_loop = asyncio.get_running_loop()
-        except RuntimeError:
-            running_loop = None
+            coroutine = self._run_approved_pending_action()
 
-        if running_loop is self._loop:
-            future = self._loop.create_task(coroutine)
-        else:
-            future = asyncio.run_coroutine_threadsafe(
-                coroutine, self._loop
+            try:
+                running_loop = asyncio.get_running_loop()
+            except RuntimeError:
+                running_loop = None
+
+            if running_loop is self._loop:
+                future = self._loop.create_task(coroutine)
+            else:
+                future = asyncio.run_coroutine_threadsafe(
+                    coroutine, self._loop
+                )
+
+        except Exception as exc:
+            if coroutine is not None:
+                try:
+                    coroutine.close()
+                except Exception:
+                    pass
+
+            self._approved_action_running = False
+            self._pending_human_fingerprint = (
+                self._approved_human_fingerprint
             )
+            self._approved_human_fingerprint = None
+            self._awaiting_human_confirmation = True
+            self._human_confirmed = False
+
+            message = (
+                "Approved action could not be scheduled. "
+                "The action was not executed by this scheduling attempt. "
+                "Approval has been restored. "
+                f"Reason: {type(exc).__name__}: {exc}"
+            )
+            print(f"[GHOST] {message}")
+            self.ui.write_log(f"ERR: {message}")
+            return
 
         def report_failure(done):
             try:
@@ -2032,8 +2232,8 @@ class GHOSTLive:
             replay_args["confirm"] = True
             replay_args["confirm_token"] = token
 
-            # Capture the exact draft details before an approved send.
-            # This is read-only and does not alter the confirmation gate.
+            # Capture and validate the exact draft before an approved send.
+            # Fail closed: never execute the send without a complete draft snapshot.
             send_verification_snapshot = None
             send_verification_started_at = None
 
@@ -2045,41 +2245,106 @@ class GHOSTLive:
 
             if is_outlook_send_draft:
                 import time as _send_time
-                import json as _send_json
                 from integrations.personal_outlook_mcp import (
                     personal_outlook_action,
                     _preview_decode,
                 )
 
-                send_verification_started_at = _send_time.time()
                 send_arguments = (
                     action.get("args", {}).get("arguments", {}) or {}
                 )
                 selected_draft_id = send_arguments.get("draft_id")
 
-                if selected_draft_id:
-                    try:
-                        pre_send_result = await asyncio.to_thread(
-                            personal_outlook_action,
-                            {
-                                "action": "call",
-                                "tool_name": "outlook_read_message",
-                                "arguments": {
-                                    "message_id": selected_draft_id,
-                                    "format": "full",
-                                    "concise": False,
-                                },
+                if not isinstance(selected_draft_id, str) or not selected_draft_id.strip():
+                    raise RuntimeError(
+                        "Send blocked: the draft ID is missing or invalid."
+                    )
+
+                try:
+                    pre_send_result = await asyncio.to_thread(
+                        personal_outlook_action,
+                        {
+                            "action": "call",
+                            "tool_name": "outlook_read_message",
+                            "arguments": {
+                                "message_id": selected_draft_id,
+                                "format": "full",
+                                "concise": False,
                             },
+                        },
+                    )
+                    send_verification_snapshot = _preview_decode(
+                        pre_send_result,
+                        "Pre-send draft snapshot",
+                    )
+                except Exception as snapshot_error:
+                    raise RuntimeError(
+                        "Send blocked: the draft could not be read and verified. "
+                        "No send was attempted."
+                    ) from snapshot_error
+
+                snapshot = send_verification_snapshot
+
+                if not isinstance(snapshot, dict):
+                    raise RuntimeError(
+                        "Send blocked: the draft snapshot is invalid."
+                    )
+
+                if not (
+                    snapshot.get("is_draft_available") is True
+                    and snapshot.get("is_draft") is True
+                ):
+                    raise RuntimeError(
+                        "Send blocked: Outlook did not confirm this item is a draft."
+                    )
+
+                subject = snapshot.get("subject")
+                if (
+                    not isinstance(subject, str)
+                    or not subject.strip()
+                    or subject.strip().casefold() == "(no subject)"
+                ):
+                    raise RuntimeError(
+                        "Send blocked: the draft subject is missing or unavailable."
+                    )
+
+                recipient_fields = ("to", "cc", "bcc")
+                recipients = []
+
+                for field in recipient_fields:
+                    if snapshot.get(f"{field}_available") is not True:
+                        raise RuntimeError(
+                            f"Send blocked: the draft's {field.upper()} recipients "
+                            "could not be verified."
                         )
-                        send_verification_snapshot = _preview_decode(
-                            pre_send_result,
-                            "Pre-send draft snapshot",
+
+                    values = snapshot.get(field)
+                    if not isinstance(values, list):
+                        raise RuntimeError(
+                            f"Send blocked: the draft's {field.upper()} recipient "
+                            "list is invalid."
                         )
-                    except Exception as snapshot_error:
-                        print(
-                            "[GHOST] Pre-send snapshot unavailable: "
-                            f"{type(snapshot_error).__name__}: {snapshot_error}"
-                        )
+
+                    for item in values:
+                        if not isinstance(item, dict):
+                            raise RuntimeError(
+                                "Send blocked: a draft recipient entry is invalid."
+                            )
+
+                        email = item.get("email")
+                        if not isinstance(email, str) or not email.strip():
+                            raise RuntimeError(
+                                "Send blocked: a recipient email address is missing."
+                            )
+                        recipients.append(email.strip())
+
+                if not recipients:
+                    raise RuntimeError(
+                        "Send blocked: the draft has no verified recipients."
+                    )
+
+                # Start the verification window only after the snapshot is valid.
+                send_verification_started_at = _send_time.time()
 
             print(
                 f"[GHOST] Executing locally approved action: "
@@ -2102,6 +2367,31 @@ class GHOSTLive:
                 result = response_data.get("result", str(response_data))
             else:
                 result = str(response_data)
+
+            # Preserve uncertain send outcomes. A failed tool response does
+            # not prove that Microsoft Graph did not complete the send.
+            if (
+                is_outlook_send_draft
+                and isinstance(response_data, dict)
+                and response_data.get("_tool_ok") is False
+            ):
+                import json as _send_outcome_json
+
+                result = _send_outcome_json.dumps(
+                    {
+                        "status": "outcome_unknown",
+                        "error_kind": str(
+                            response_data.get("_tool_error_kind") or "unknown"
+                        ),
+                        "message": (
+                            "Ghost could not confirm whether Outlook completed "
+                            "the send. Check Sent Items manually before taking "
+                            "any further action. No retry or resend was attempted."
+                        ),
+                        "tool_error": str(result)[:500],
+                    },
+                    ensure_ascii=False,
+                )
 
             # Verify an approved draft send using Sent Items.
             # Never retry a send when verification is missing or inconclusive.
@@ -2140,14 +2430,26 @@ class GHOSTLive:
 
                         def _recipient_set(message, field):
                             values = message.get(field)
+
                             if not isinstance(values, list):
                                 return None
-                            return {
-                                str(item.get("email") or "").strip().casefold()
-                                for item in values
-                                if isinstance(item, dict)
-                                and item.get("email")
-                            }
+
+                            recipients = set()
+
+                            for item in values:
+                                if not isinstance(item, dict):
+                                    return None
+
+                                email = str(
+                                    item.get("email") or ""
+                                ).strip().casefold()
+
+                                if not email:
+                                    return None
+
+                                recipients.add(email)
+
+                            return recipients
 
                         expected_to = _recipient_set(
                             send_verification_snapshot, "to"
@@ -2229,7 +2531,7 @@ class GHOSTLive:
                                     # Reject older messages so an old email
                                     # cannot verify this send.
                                     candidate_time = str(
-                                        candidate.get("received") or ""
+                                        candidate.get("sent") or ""
                                     )
                                     try:
                                         parsed_time = _send_datetime.fromisoformat(
@@ -2247,22 +2549,32 @@ class GHOSTLive:
                                     except (ValueError, TypeError):
                                         continue
 
-                                    full_result = await asyncio.to_thread(
-                                        personal_outlook_action,
-                                        {
-                                            "action": "call",
-                                            "tool_name": "outlook_read_message",
-                                            "arguments": {
-                                                "message_id": candidate_id,
-                                                "format": "full",
-                                                "concise": False,
+                                    try:
+                                        full_result = await asyncio.to_thread(
+                                            personal_outlook_action,
+                                            {
+                                                "action": "call",
+                                                "tool_name": "outlook_read_message",
+                                                "arguments": {
+                                                    "message_id": candidate_id,
+                                                    "format": "full",
+                                                    "concise": False,
+                                                },
                                             },
-                                        },
-                                    )
-                                    full_data = _preview_decode(
-                                        full_result,
-                                        "Sent Items candidate read",
-                                    )
+                                        )
+                                        full_data = _preview_decode(
+                                            full_result,
+                                            "Sent Items candidate read",
+                                        )
+                                    except Exception as candidate_read_error:
+                                        incomplete = True
+                                        print(
+                                            "[GHOST] Sent Items candidate read "
+                                            "failed; checking the next candidate: "
+                                            f"{type(candidate_read_error).__name__}: "
+                                            f"{candidate_read_error}"
+                                        )
+                                        continue
 
                                     actual_subject = str(
                                         full_data.get("subject") or ""
@@ -2898,6 +3210,8 @@ class GHOSTLive:
 
     async def _dispatch_tool(self, name: str, args: dict) -> ToolResult:
         from safety import sanitize as _sanitize
+        args = dict(args or {})
+        args.pop("_ghost_safety_approved", None)
         blocked = self.loop_guard.check(name, args)
         if blocked:
             print(f"[GHOST] ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂºÃ¢â‚¬Ëœ {name} blocked by loop guard")
@@ -3005,8 +3319,9 @@ class GHOSTLive:
                     ) + (f"\n[token: {token}]" if token else ""),
                     error_kind="confirmation",
                 )
-        if name == "outlook" and str(args.get("action", "")).strip().lower() in {"move_email", "bulk_organize", "delete_folder"}:
-            args["_ghost_safety_approved"] = True
+        if name == "outlook" and str(args.get("action", "")).strip().lower() in {"move_email", "bulk_organize", "delete_folder", "send_email", "reply", "forward", "send_reply", "send_draft", "delete_draft", "delete_email", "permanent_delete", "attach_file", "update_event", "delete_event", "respond_event", "delete_contact", "set_auto_reply", "create_event"}:
+            from agent.outlook_approval import OUTLOOK_APPROVAL_CAPABILITY
+            args["_ghost_safety_approved"] = OUTLOOK_APPROVAL_CAPABILITY
 
         entry = self._tool_handlers.get(name)
         if entry is None:
@@ -3039,7 +3354,14 @@ class GHOSTLive:
             return fn(args)
 
         return await run_sync_tool(
-            _invoke_handler, name, timeout=timeout
+            _invoke_handler,
+            name,
+            timeout=timeout,
+            attempts=(
+                1 if name == "personal_outlook"
+                and str(args.get("tool_name", "")).strip() == "outlook_send_draft"
+                else 3
+            ),
         )
 
     
@@ -3106,6 +3428,9 @@ class GHOSTLive:
     async def _execute_tool(self, fc, _approved_replay=False) -> "types.FunctionResponse": # type: ignore
         name = fc.name
         args = dict(fc.args or {})
+        args.pop("_ghost_safety_approved", None)
+        tool_ok = True
+        tool_error_kind = ""
 
         from safety import sanitize as _sanitize
         log_tool(name, _sanitize(name, args))
@@ -3270,7 +3595,9 @@ class GHOSTLive:
                 # Exact human approval and one-time token validated.
                 self._approved_human_fingerprint = None
                 self._pending_confirmation_token = None
+                self._pending_human_fingerprint = None
                 self._pending_human_action = None
+                self._awaiting_human_confirmation = False
                 self._human_confirmed = False
 
             else:
@@ -3317,8 +3644,9 @@ class GHOSTLive:
                         ) + (f"\n[token: {token}]" if token else "")
                     }
                 )
-        if name == "outlook" and str(args.get("action", "")).strip().lower() in {"move_email", "bulk_organize", "delete_folder"}:
-            args["_ghost_safety_approved"] = True
+        if name == "outlook" and str(args.get("action", "")).strip().lower() in {"move_email", "bulk_organize", "delete_folder", "send_email", "reply", "forward", "send_reply", "send_draft", "delete_draft", "delete_email", "permanent_delete", "attach_file", "update_event", "delete_event", "respond_event", "delete_contact", "set_auto_reply", "create_event"}:
+            from agent.outlook_approval import OUTLOOK_APPROVAL_CAPABILITY
+            args["_ghost_safety_approved"] = OUTLOOK_APPROVAL_CAPABILITY
 
         try:
             # Uniform dispatch through the shared handler table so every
@@ -3352,9 +3680,18 @@ class GHOSTLive:
                     return handler(args)
 
                 r = await run_sync_tool(
-                    _invoke_handler, name, timeout=timeout
+                    _invoke_handler,
+                    name,
+                    timeout=timeout,
+                    attempts=(
+                        1 if name == "personal_outlook"
+                        and str(args.get("tool_name", "")).strip() == "outlook_send_draft"
+                        else 3
+                    ),
                 )
                 result = r.content or f"{name} done."
+                tool_ok = bool(r.ok)
+                tool_error_kind = str(r.error_kind or "")
 
                 # Verify newly created Personal Outlook drafts using a
                 # separate READ-ONLY read operation.
@@ -3477,6 +3814,8 @@ class GHOSTLive:
                 result = f"Unknown tool: {name}"
 
         except Exception as e:
+            tool_ok = False
+            tool_error_kind = "exception"
             result = f"Tool '{name}' failed: {e}"
             traceback.print_exc()
             log_tool(name, args, error=e)
@@ -3494,9 +3833,19 @@ class GHOSTLive:
         print(f"[GHOST] ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â¤ {name} ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ {str(result)[:80]}")
 
         # ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Result: tek cÃƒÆ’Ã‚Â¼mle sÃƒÆ’Ã‚Â¶yle, dur ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
+        response_payload = {"result": result}
+
+        if (
+            name == "personal_outlook"
+            and str(args.get("tool_name", "")).strip() == "outlook_send_draft"
+        ):
+            response_payload["_tool_ok"] = tool_ok
+            response_payload["_tool_error_kind"] = tool_error_kind
+
         return types.FunctionResponse(
-            id=fc.id, name=name,
-            response={"result": result}
+            id=fc.id,
+            name=name,
+            response=response_payload
         )
 
     def _schedule(self, args: dict) -> str:

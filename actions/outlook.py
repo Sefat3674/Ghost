@@ -1,4 +1,9 @@
+"""
+Ghost Outlook action (v4) - Microsoft Graph.
 
+Sections: AI helpers (summaries, inbox intelligence, local/Gemini reply
+engine) followed by the action dispatcher at the bottom of the file.
+"""
 from datetime import datetime, timedelta
 from html.parser import HTMLParser
 import uuid
@@ -8,13 +13,24 @@ import os
 
 import api_keys
 
-from outlook.auth.microsoft_auth import MicrosoftAuth
-from outlook.services.graph_client import GraphClient
+from outlook.auth.microsoft_auth import get_auth
+from outlook.services.graph_client import GraphClient, GraphAPIError
 from outlook.services.email_service import EmailService
 from outlook.services.folder_service import FolderService
 from outlook.services.calendar_service import CalendarService
 from outlook.services.contact_service import ContactService
 from outlook.services.attachment_service import AttachmentService
+from outlook.services.mailbox_service import MailboxService
+
+
+def _dhaka_tz():
+    """Asia/Dhaka, with a fixed UTC+6 fallback when tzdata is not installed."""
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo("Asia/Dhaka")
+    except Exception:
+        from datetime import timezone as _tz
+        return _tz(timedelta(hours=6), "Asia/Dhaka")
 
 
 def _limit(value, default=10, maximum=25):
@@ -303,7 +319,7 @@ def _analyze_inbox_with_gemini(email_list, language="English"):
         )
 
         from zoneinfo import ZoneInfo
-        now_dhaka = datetime.now(ZoneInfo("Asia/Dhaka"))
+        now_dhaka = datetime.now(_dhaka_tz())
         detected_deadlines = []
 
         for index, email in enumerate(email_list, 1):
@@ -417,7 +433,7 @@ def _analyze_inbox_with_gemini(email_list, language="English"):
                             deadline = datetime.combine(
                                 parsed_date,
                                 parsed_time,
-                                tzinfo=ZoneInfo("Asia/Dhaka")
+                                tzinfo=_dhaka_tz()
                             )
 
                             normalized = deadline.isoformat()
@@ -556,13 +572,6 @@ def _analyze_inbox_with_gemini(email_list, language="English"):
 
                 if has_action and (has_request or is_imperative) and not is_deadline_sentence:
                     subject = email.get("subject") or "(No subject)"
-                    if email.get("parent_folder_id") == destination_id:
-                        skipped.append({
-                            "id": message_id,
-                            "subject": subject
-                        })
-                        continue
-
                     sender = (
                         email.get("sender_name")
                         or email.get("sender_email")
@@ -1203,11 +1212,10 @@ def _generate_local_reply(email, language="English"):
 
     if language == "Bangla":
         return (
-            f"?????? {sender},\n\n"
-            "????? ??????? ???? ???????? ????? ???????? ??????? "
-            "??? ??????? ?????????? ????? ??????????? ???? ????? ??? "
-            "?????? ??????? ????? ??????\n\n"
-            "????????????"
+            f"প্রিয় {sender},\n\n"
+            "আপনার ইমেইলের জন্য ধন্যবাদ। আমি বিষয়টি দেখে প্রয়োজনীয় "
+            "তথ্য যাচাই করে যথাসময়ে আপনাকে জানাব।\n\n"
+            "ধন্যবাদান্তে"
         )
 
     if any(word in text for word in (
@@ -1409,15 +1417,14 @@ def _generate_local_grouped_reply(
 
     if language == "Bangla":
         reply = (
-            f"?????? {sender},\n\n"
-            "????? ????? ??? ???????? ???? ???????? "
-            f"??? ?????????? ??????? ??????? ???? ???? ??????? ???: "
-            f"{'; '.join(actions)}? ??????? ????? ? ?????????? ???? "
-            "?????? ?????????? ?? ??????? ??????"
+            f"প্রিয় {sender},\n\n"
+            "আপনার ইমেইল এবং অনুরোধকৃত কাজগুলোর জন্য ধন্যবাদ। "
+            f"আমি নিম্নলিখিত কাজগুলো দেখব: {'; '.join(actions)}। "
+            "কাজ সম্পন্ন হলে আপনাকে জানাব।"
         )
         if deadline:
-            reply += f"\n\n???????? ????????: {deadline}?"
-        reply += "\n\n????????????"
+            reply += f"\n\nউল্লিখিত সময়সীমা: {deadline}।"
+        reply += "\n\nধন্যবাদান্তে"
         return reply
 
     reply = (
@@ -1436,1236 +1443,1062 @@ def _generate_local_grouped_reply(
 
 
 # ============================================================
-# MAIN OUTLOOK ACTION HANDLER
+# MAIN OUTLOOK ACTION HANDLER (v4)
 # ============================================================
+
+import re
+import time
+from types import SimpleNamespace
+
+_ID_RE = re.compile(r"^[A-Za-z0-9_\-=\.]+$")
+_DRAFT_TTL_SECONDS = 24 * 3600
+
+# Actions that change or send something. The safety layer must set
+# Ghost must provide its trusted approval capability after user confirmation.
+APPROVAL_REQUIRED = {
+    "move_email", "bulk_organize", "delete_folder",
+    "send_email", "reply", "forward", "send_reply", "send_draft", "delete_draft",
+    "delete_email", "permanent_delete", "attach_file",
+    "update_event", "delete_event", "respond_event",
+    "delete_contact", "set_auto_reply",
+}
+
+
+class _Stop(Exception):
+    """Raised by handlers to return a plain message to the user."""
+
+
+from agent.outlook_approval import OUTLOOK_APPROVAL_CAPABILITY
+
+
+def _approved(p):
+    return p.get("_ghost_safety_approved") is OUTLOOK_APPROVAL_CAPABILITY
+
+
+def _require_approval(p, what):
+    if not _approved(p):
+        raise _Stop(
+            f"{what} requires explicit user confirmation. Nothing was changed. "
+            "Show the exact details to the user, then repeat with confirm=True."
+        )
+
+
+def _text(p, key, default=""):
+    return str(p.get(key, default) or "").strip()
+
+
+def _clean_id(value, label="ID"):
+    value = str(value or "").strip()
+    if not value:
+        raise _Stop(f"Please provide the {label}.")
+    if not _ID_RE.match(value):
+        raise _Stop(f"The {label} looks invalid. Nothing was changed.")
+    return value
+
+
+def _lang(p):
+    value = _text(p, "language", "English").casefold()
+    return "Bangla" if value in ("bangla", "bengali", "বাংলা") else "English"
+
+
+def _address_list(value):
+    if isinstance(value, (list, tuple)):
+        return [str(v).strip() for v in value if str(v).strip()]
+    return [v.strip() for v in str(value or "").replace(";", ",").split(",") if v.strip()]
+
+
+def _valid_addresses(value, label):
+    addrs = _address_list(value)
+    bad = [a for a in addrs if not re.match(r"^[^@\s,<>]+@[^@\s,<>]+\.[^@\s,<>]+$", a)]
+    if bad:
+        raise _Stop(f"Invalid {label} address: {', '.join(bad)}. Nothing was sent.")
+    return addrs
+
+
+def _sender_of(item):
+    return _format_sender({"from": {"emailAddress": {
+        "name": item.get("sender_name"), "address": item.get("sender_email")}}})
+
+
+def _fmt_emails(title, items, show_status=True):
+    lines = [title]
+    for i, item in enumerate(items, 1):
+        row = (
+            f"{i}. {item['subject']}\n"
+            f"   Message ID: {item.get('id')}\n"
+            f"   From: {_sender_of(item)}\n"
+            f"   Received: {item.get('received_at') or item.get('sent_at') or 'Unknown'}\n"
+        )
+        if show_status:
+            flags = []
+            flags.append("Read" if item.get("is_read") else "Unread")
+            if item.get("has_attachments"):
+                flags.append("Attachment")
+            if item.get("flag_status") == "flagged":
+                flags.append("Flagged")
+            if item.get("importance") == "high":
+                flags.append("High importance")
+            if item.get("categories"):
+                flags.append("Categories: " + ", ".join(item["categories"]))
+            row += f"   Status: {' | '.join(flags)}\n"
+        row += f"   Preview: {item.get('preview') or 'No preview'}"
+        lines.append(row)
+    return "\n\n".join(lines)
+
+
+def _resolve_folder_or_stop(ctx, name, label="Destination folder"):
+    folder_id, display = ctx.folders.resolve(name)
+    if not folder_id:
+        names = [f.get("displayName", "Unnamed") for f in ctx.folders.list_folders()]
+        raise _Stop(f"{label} '{name}' was not found. Available folders: "
+                    f"{', '.join(names)}. Nothing was changed.")
+    return folder_id, display
+
+
+def _purge_expired_drafts():
+    now = time.time()
+    expired = [k for k, v in _PENDING_REPLY_DRAFTS.items()
+               if now - float(v.get("created_at", now)) > _DRAFT_TTL_SECONDS]
+    for key in expired:
+        del _PENDING_REPLY_DRAFTS[key]
+    if expired:
+        _save_pending_drafts()
+
+
+def _get_draft(p):
+    _purge_expired_drafts()
+    draft_id = _text(p, "draft_id")
+    draft = _PENDING_REPLY_DRAFTS.get(draft_id)
+    if not draft:
+        raise _Stop("Draft not found or expired. Please create a new draft.")
+    return draft_id, draft
+
+
+# ------------------------------------------------------------------
+# READING
+# ------------------------------------------------------------------
+
+def _h_read(ctx, p):
+    folder = _text(p, "folder", "inbox")
+    items = ctx.emails.get_latest_emails(ctx.limit, folder=folder)
+    if not items:
+        return f"Your Outlook folder '{folder}' is empty."
+    return _fmt_emails(f"Latest {len(items)} Outlook emails ({folder}):", items)
+
+
+def _h_unread(ctx, p):
+    items = ctx.emails.get_unread_emails(ctx.limit, folder=_text(p, "folder", "inbox"))
+    if not items:
+        return "You have no unread Outlook emails."
+    return _fmt_emails(f"You have {len(items)} unread Outlook emails:", items, False)
+
+
+def _h_search(ctx, p):
+    if not ctx.query:
+        return "Please provide a search keyword for Outlook emails."
+    items = ctx.emails.search_emails(ctx.query, ctx.limit, folder=_text(p, "folder") or None)
+    if not items:
+        return f"No Outlook emails found for '{ctx.query}'."
+    return _fmt_emails(f"Found {len(items)} Outlook emails for '{ctx.query}':", items, False)
+
+
+def _h_filter(ctx, p):
+    items = ctx.emails.filter_emails(
+        sender=_text(p, "sender") or None, since=_text(p, "since") or None,
+        until=_text(p, "until") or None, unread_only=bool(p.get("unread_only")),
+        has_attachments=p.get("has_attachments"), importance=_text(p, "importance") or None,
+        folder=_text(p, "folder", "inbox"), limit=ctx.limit)
+    if not items:
+        return "No emails matched those filters."
+    return _fmt_emails(f"{len(items)} emails matched:", items)
+
+
+def _h_read_email(ctx, p):
+    email = ctx.emails.get_email(_clean_id(p.get("message_id"), "Outlook message ID"))
+    body = _clean_email_body(email.get("body", ""), email.get("body_type", "")) \
+        or "No readable email body."
+    to = ", ".join(email.get("to_recipients") or []) or "—"
+    cc = ", ".join(email.get("cc_recipients") or [])
+    return (
+        "COMPLETE OUTLOOK EMAIL\n\n"
+        f"Subject: {email.get('subject')}\n"
+        f"From: {email.get('sender_name')} <{email.get('sender_email')}>\n"
+        f"To: {to}\n" + (f"Cc: {cc}\n" if cc else "") +
+        f"Received: {email.get('received_at')}\n"
+        f"Importance: {email.get('importance')}\n"
+        f"Status: {'Read' if email.get('is_read') else 'Unread'}\n"
+        f"Has attachments: {email.get('has_attachments')}\n"
+        + (f"Categories: {', '.join(email['categories'])}\n" if email.get("categories") else "")
+        + f"Conversation ID: {email.get('conversation_id')}\n\n"
+        f"EMAIL BODY:\n{body[:12000]}"
+    )
+
+
+def _h_thread(ctx, p):
+    conv = _text(p, "conversation_id")
+    if not conv:
+        conv = ctx.emails.get_email(_clean_id(p.get("message_id"), "message ID")
+                                    ).get("conversation_id")
+    if not conv:
+        return "Could not determine the conversation."
+    items = ctx.emails.get_thread(conv, ctx.limit)
+    if not items:
+        return "No messages found in that conversation."
+    return _fmt_emails(f"Conversation thread ({len(items)} messages, oldest first):", items)
+
+
+def _h_summarize(ctx, p):
+    message_id = _text(p, "message_id")
+    if message_id:
+        email = ctx.emails.get_email(_clean_id(message_id, "message ID"))
+    else:
+        latest = ctx.emails.get_latest_emails(1)
+        if not latest:
+            return "Your Outlook inbox is empty."
+        email = latest[0]
+    return _summarize_email_with_gemini(email, _lang(p))
+
+
+def _intelligence_footer(ctx, items, language):
+    sent = ctx.emails.get_recent_sent_emails(max(ctx.limit * 2, 20))
+    profile = ctx.graph.get_profile() or {}
+    own = {profile.get("mail"), profile.get("userPrincipalName")}
+    pending = _detect_pending_replies(items, sent, own)
+
+    if language == "Bangla":
+        head = ["", "", "সম্ভাব্য উত্তর দেওয়া বাকি", "==========================",
+                f"সম্ভাব্য কথোপকথন: {len(pending)}"]
+        row = "- {0} | {1} | {2}"
+        none = "সাম্প্রতিক বার্তাগুলোতে উত্তরহীন কোনো কথোপকথন পাওয়া যায়নি।"
+        unk = ("(বিষয় নেই)", "অজানা প্রেরক", "অজানা সময়")
+        note = "এটি স্থানীয় সময়-ভিত্তিক পরীক্ষা; উত্তর যে প্রয়োজন তার নিশ্চয়তা নয়।"
+    else:
+        head = ["", "", "POTENTIALLY AWAITING YOUR REPLY", "===============================",
+                f"Potential conversations: {len(pending)}"]
+        row = "- {0} | {1} | {2}"
+        none = "No potentially unanswered conversations found in the recent messages."
+        unk = ("(No subject)", "Unknown sender", "Unknown time")
+        note = "This is a local conversation/timestamp check, not confirmation that a reply is required."
+
+    lines = list(head)
+    for e in pending:
+        lines.append(row.format(e.get("subject") or unk[0],
+                                e.get("sender_name") or e.get("sender_email") or unk[1],
+                                e.get("received_at") or unk[2]))
+    if not pending:
+        lines.append(none)
+    lines.append(note)
+    return "\n".join(lines)
+
+
+def _h_intelligence(ctx, p):
+    language = _lang(p)
+    items = ctx.emails.get_latest_emails(ctx.limit)
+    if not items:
+        return "Your Outlook inbox is empty."
+    report = _analyze_inbox_with_gemini(items, language)
+    try:
+        return report + "\n" + _intelligence_footer(ctx, items, language)
+    except Exception as exc:
+        return (report + "\n\nREPLY DETECTION UNAVAILABLE\n"
+                f"Sent Items comparison could not be completed: {exc}")
+
+
+# ------------------------------------------------------------------
+# AI REPLY DRAFTS (local review workflow, nothing sent without hash + approval)
+# ------------------------------------------------------------------
+
+def _store_draft(message_id, email, language, reply, source, extra=None):
+    draft_id = uuid.uuid4().hex[:12]
+    draft = {
+        "message_id": message_id,
+        "subject": str(email.get("subject") or "(No subject)").replace("\u00a0", " ").strip(),
+        "sender": _sender_of(email),
+        "language": language,
+        "body": reply,
+        "generation_source": source,
+        "created_at": time.time(),
+        "draft_hash": hashlib.sha256(reply.encode("utf-8")).hexdigest(),
+    }
+    draft.update(extra or {})
+    _PENDING_REPLY_DRAFTS[draft_id] = draft
+    _save_pending_drafts()
+    return draft_id, draft
+
+
+def _h_draft_reply(ctx, p):
+    message_id = _clean_id(p.get("message_id"), "Outlook message ID")
+    email = ctx.emails.get_email(message_id)
+    language = _lang(p)
+    source = "Gemini"
+    if p.get("local_only"):
+        reply, source = _generate_local_reply(email, language), "Local"
+    else:
+        try:
+            reply = _generate_reply_with_gemini(email, language)
+        except Exception as exc:
+            print(f"[Outlook Draft] Gemini unavailable; using local reply: {exc}")
+            reply, source = _generate_local_reply(email, language), "Local fallback"
+    reply = _clean_local_reply_text(reply)
+    draft_id, draft = _store_draft(message_id, email, language, reply, source)
+    return (
+        "OUTLOOK REPLY DRAFT CREATED — NOT SENT\n\n"
+        f"Draft ID: {draft_id}\nTo: {draft['sender']}\n"
+        f"Subject: Re: {draft['subject']}\nGeneration: {source}\n\n"
+        f"{reply}\n\nReview this draft. It has NOT been sent.\n"
+        f"Draft hash: {draft['draft_hash']}"
+    )
+
+
+def _h_draft_grouped_reply(ctx, p):
+    message_id = _clean_id(p.get("message_id"), "original Outlook message ID")
+    email = ctx.emails.get_email(message_id)
+
+    raw = p.get("required_actions", [])
+    if isinstance(raw, str):
+        raw = raw.splitlines()
+    if not isinstance(raw, (list, tuple)):
+        return "Required actions must be supplied as a list or text."
+    required = []
+    for item in raw:
+        text = str(item).strip().lstrip("-•*– ").strip()
+        if text and text not in required:
+            required.append(text[:500])
+    if not required:
+        return "No required actions were provided. No draft created."
+
+    language, deadline = _lang(p), _text(p, "deadline")
+    instruction = (
+        "Create ONE consolidated professional reply that addresses every required "
+        "action below. Acknowledge the request, explain the intended next steps, and "
+        "avoid repeating the same commitment. Do not claim that any task has already "
+        "been completed. Do not invent progress, results, or commitments beyond the "
+        "requested work.\n\nREQUIRED ACTIONS:\n"
+        + "\n".join(f"- {a}" for a in required) + "\n"
+        + (f"DEADLINE PROVIDED BY THE USER: {deadline}\n" if deadline else "")
+        + f"\nWrite a concise reply in {language}."
+    )
+    source = "Gemini"
+    if p.get("local_only"):
+        reply = _generate_local_grouped_reply(email=email, required_actions=required,
+                                              language=language, deadline=deadline)
+        source = "Local"
+    else:
+        try:
+            reply = _generate_reply_with_gemini(email, language, instruction)
+        except Exception as exc:
+            print(f"[Grouped Reply Draft] Gemini unavailable; using safe template: {exc}")
+            source = "Local fallback"
+            reply = _generate_local_grouped_reply(email=email, required_actions=required,
+                                                  language=language, deadline=deadline)
+    reply = _clean_local_reply_text(reply)
+    draft_id, draft = _store_draft(message_id, email, language, reply, source,
+                                   {"required_actions": required,
+                                    "draft_type": "grouped_reply"})
+    return (
+        "CONSOLIDATED OUTLOOK REPLY DRAFT CREATED\n"
+        f"Draft ID: {draft_id}\nSubject: Re: {draft['subject']}\n"
+        f"Generation: {source}\nRequired actions included:\n"
+        + "\n".join(f"- {a}" for a in required)
+        + f"\n\nDRAFT:\n{reply}\n\nStatus: Saved for review. NOT SENT.\n"
+        f"Draft hash: {draft['draft_hash']}"
+    )
+
+
+def _h_show_draft(ctx, p):
+    draft_id, draft = _get_draft(p)
+    return (
+        "PENDING OUTLOOK REPLY - NOT SENT\n\n"
+        f"Draft ID: {draft_id}\nDraft hash: {draft['draft_hash']}\n"
+        f"To: {draft['sender']}\nSubject: Re: {draft['subject']}\n\n{draft['body']}"
+    )
+
+
+def _h_revise_reply(ctx, p):
+    draft_id, draft = _get_draft(p)
+    instruction = _text(p, "instruction")
+    if not instruction:
+        return "Please provide instructions for revising the reply."
+    email = ctx.emails.get_email(draft["message_id"])
+    source = "Gemini"
+    if p.get("local_only"):
+        revised = _revise_local_reply(draft["body"], instruction, email, draft["language"])
+        source = "Local"
+    else:
+        try:
+            revised = _generate_reply_with_gemini(email, draft["language"], instruction,
+                                                  draft["body"])
+        except Exception as exc:
+            print(f"[Outlook Revision] Gemini unavailable; trying local revision: {exc}")
+            revised = _revise_local_reply(draft["body"], instruction, email, draft["language"])
+            source = "Local fallback"
+    revised = _clean_local_reply_text(revised)
+    draft.update(body=revised, generation_source=source, created_at=time.time(),
+                 draft_hash=hashlib.sha256(revised.encode("utf-8")).hexdigest())
+    _save_pending_drafts()
+    return (
+        "OUTLOOK REPLY DRAFT REVISED\nStatus: Saved for review. NOT SENT.\n"
+        f"Draft ID: {draft_id}\nGeneration source: {source}\n"
+        f"Draft hash: {draft['draft_hash']}\n\n{revised}"
+    )
+
+
+def _h_send_reply(ctx, p):
+    draft_id, draft = _get_draft(p)
+    provided = _text(p, "draft_hash")
+    if not provided or provided != draft.get("draft_hash"):
+        return ("Draft version mismatch. No email was sent. Display the current "
+                "draft and request confirmation again.")
+    _require_approval(p, "Sending the reviewed Outlook reply")
+    ctx.emails.reply_email(draft["message_id"], draft["body"],
+                           reply_all=bool(p.get("reply_all")))
+    del _PENDING_REPLY_DRAFTS[draft_id]
+    _save_pending_drafts()
+    return ("Outlook reply sent successfully.\n"
+            f"Subject: Re: {draft['subject']}\nRecipient: {draft['sender']}")
+
+
+# ------------------------------------------------------------------
+# COMPOSE / SEND / DRAFTS IN THE MAILBOX
+# ------------------------------------------------------------------
+
+def _compose_fields(p):
+    to = _valid_addresses(p.get("to"), "recipient")
+    if not to:
+        raise _Stop("Please provide at least one recipient in 'to'.")
+    cc = _valid_addresses(p.get("cc"), "Cc")
+    bcc = _valid_addresses(p.get("bcc"), "Bcc")
+    return to, cc, bcc, _text(p, "subject"), str(p.get("body") or ""), bool(p.get("html"))
+
+
+def _h_create_draft(ctx, p):
+    to, cc, bcc, subject, body, html = _compose_fields(p)
+    draft = ctx.emails.create_draft(to, subject, body, cc, bcc, html)
+    return ("OUTLOOK DRAFT SAVED IN YOUR DRAFTS FOLDER — NOT SENT\n"
+            f"Draft message ID: {draft.get('id')}\nTo: {', '.join(to)}\n"
+            f"Subject: {subject or '(No subject)'}")
+
+
+def _h_update_draft(ctx, p):
+    draft_id = _clean_id(p.get("message_id"), "draft message ID")
+    kwargs = {}
+    for key in ("subject", "body"):
+        if key in p:
+            kwargs[key] = str(p.get(key) or "")
+    for key in ("to", "cc", "bcc"):
+        if key in p:
+            kwargs[key] = _valid_addresses(p.get(key), key)
+    ctx.emails.update_draft(draft_id, html=bool(p.get("html")), **kwargs)
+    return "Draft updated. It has NOT been sent."
+
+
+def _h_list_drafts(ctx, p):
+    items = ctx.emails.list_drafts(ctx.limit)
+    if not items:
+        return "You have no drafts."
+    return _fmt_emails(f"{len(items)} drafts:", items, False)
+
+
+def _h_send_draft(ctx, p):
+    _require_approval(p, "Sending a draft")
+    draft_id = _clean_id(p.get("message_id"), "draft message ID")
+    draft = ctx.emails.get_email(draft_id)
+    if not draft.get("is_draft"):
+        return "That message is not a draft. Nothing was sent."
+    ctx.emails.send_draft(draft_id)
+    return f"Draft sent.\nSubject: {draft.get('subject')}\nTo: {', '.join(draft.get('to_recipients') or [])}"
+
+
+def _h_delete_draft(ctx, p):
+    _require_approval(p, "Deleting a draft")
+    ctx.emails.delete_draft(_clean_id(p.get("message_id"), "draft message ID"))
+    return "Draft deleted."
+
+
+def _h_send_email(ctx, p):
+    to, cc, bcc, subject, body, html = _compose_fields(p)
+
+    importance = _text(p, "importance").casefold() or None
+    if importance and importance not in ("low", "normal", "high"):
+        raise _Stop(
+            "Invalid importance. Use 'low', 'normal' or 'high'. Nothing was sent."
+        )
+
+    _require_approval(
+        p,
+        f"Sending email to {', '.join(to)} with subject '{subject}'"
+    )
+
+    ctx.emails.send_email(
+        to, subject, body, cc, bcc, html, importance
+    )
+
+    return (
+        f"Email sent.\nTo: {', '.join(to)}"
+        f"\nSubject: {subject or '(No subject)'}"
+    )
+
+
+def _h_reply(ctx, p):
+    message_id = _clean_id(p.get("message_id"), "message ID")
+    comment = str(p.get("comment") or p.get("body") or "").strip()
+    if not comment:
+        return "Please provide the reply text in 'comment'."
+    _require_approval(p, "Sending this reply")
+    ctx.emails.reply_email(message_id, comment, reply_all=bool(p.get("reply_all")))
+    return "Reply sent."
+
+
+def _h_forward(ctx, p):
+    message_id = _clean_id(p.get("message_id"), "message ID")
+    to = _valid_addresses(p.get("to"), "recipient")
+    if not to:
+        return "Please provide at least one recipient in 'to'."
+    _require_approval(p, f"Forwarding this email to {', '.join(to)}")
+    ctx.emails.forward_email(message_id, to, str(p.get("comment") or ""))
+    return f"Email forwarded to {', '.join(to)}."
+
+
+# ------------------------------------------------------------------
+# MESSAGE STATE
+# ------------------------------------------------------------------
+
+def _simple_state(method, done):
+    def handler(ctx, p):
+        getattr(ctx.emails, method)(_clean_id(p.get("message_id"), "message ID"))
+        return done
+    return handler
+
+
+def _h_set_importance(ctx, p):
+    level = _text(p, "importance").casefold()
+    ctx.emails.set_importance(_clean_id(p.get("message_id"), "message ID"), level)
+    return f"Importance set to {level}."
+
+
+def _h_set_categories(ctx, p):
+    cats = _address_list(p.get("categories"))
+    ctx.emails.set_categories(_clean_id(p.get("message_id"), "message ID"), cats)
+    return "Categories updated: " + (", ".join(cats) if cats else "(cleared)")
+
+
+def _h_archive(ctx, p):
+    ctx.emails.archive_email(_clean_id(p.get("message_id"), "message ID"))
+    return "Email archived."
+
+
+def _h_delete_email(ctx, p):
+    mid = _clean_id(p.get("message_id"), "message ID")
+    _require_approval(p, "Deleting this email")
+    ctx.emails.delete_email(mid)
+    return "Email moved to Deleted Items (recoverable)."
+
+
+def _h_permanent_delete(ctx, p):
+    mid = _clean_id(p.get("message_id"), "message ID")
+    _require_approval(p, "PERMANENTLY deleting this email")
+    ctx.emails.permanently_delete_email(mid)
+    return "Email permanently deleted."
+
+
+# ------------------------------------------------------------------
+# MOVE / BULK ORGANIZE
+# ------------------------------------------------------------------
+
+def _h_move_email(ctx, p):
+    message_id = _clean_id(p.get("message_id"), "email message_id")
+    dest_name = _text(p, "destination_folder")
+    dest_id = _text(p, "destination_folder_id")
+    if not dest_name and not dest_id:
+        return "Please provide destination_folder or destination_folder_id. No email was moved."
+    _require_approval(p, "Moving this email")
+    if dest_name:
+        dest_id, dest_name = _resolve_folder_or_stop(ctx, dest_name)
+    else:
+        dest_id = _clean_id(dest_id, "destination folder ID")
+    email = ctx.emails.get_email(message_id)
+    ctx.emails.move_email(message_id, dest_id)
+    return ("OUTLOOK EMAIL MOVED SUCCESSFULLY\n"
+            f"Subject: {email.get('subject')}\n"
+            f"Destination: {dest_name or dest_id}\nStatus: Move completed.")
+
+
+def _h_preview_bulk_organize(ctx, p):
+    organize_by = _text(p, "organize_by").casefold()
+    value, dest_name = _text(p, "value"), _text(p, "destination_folder")
+    if organize_by not in ("sender", "subject"):
+        return "organize_by must be 'sender' or 'subject'. No emails were moved."
+    if not value:
+        return "Please provide a sender or subject value."
+    if not dest_name:
+        return "Please provide a destination_folder."
+    dest_id, dest_display = _resolve_folder_or_stop(ctx, dest_name)
+
+    if organize_by == "sender" and "@" in value:
+        items = ctx.emails.filter_emails(sender=value, folder="inbox", limit=ctx.limit)
+    else:
+        items = ctx.emails.search_emails(value, ctx.limit)
+    target = value.casefold()
+    if organize_by == "sender":
+        hits = [i for i in items if target in str(i.get("sender_email") or "").casefold()
+                or target in str(i.get("sender_name") or "").casefold()]
+    else:
+        hits = [i for i in items if target in str(i.get("subject") or "").casefold()]
+
+    already = [i for i in hits if i.get("parent_folder_id") == dest_id]
+    matches = [i for i in hits if i.get("parent_folder_id") != dest_id]
+    if not matches:
+        if already:
+            return (f"Found {len(already)} matching email(s), but all are already in "
+                    f"'{dest_display}'. No emails were moved.")
+        return f"No emails matched {organize_by} '{value}'. No emails were moved."
+
+    lines = ["BULK ORGANIZATION PREVIEW", f"Organize by: {organize_by}",
+             f"Search value: {value}", f"Destination: {dest_display}",
+             f"Matching emails to move: {len(matches)}",
+             f"Already in destination (skipped): {len(already)}", "",
+             "REVIEW THESE EMAILS:"]
+    for i, item in enumerate(matches, 1):
+        lines.append(f"{i}. {item.get('subject') or '(No subject)'}\n"
+                     f"   From: {item.get('sender_email') or item.get('sender_name')}\n"
+                     f"   Message ID: {item.get('id')}")
+    lines += ["", "No emails have been moved.",
+              "To proceed, pass the listed message IDs to bulk_organize with confirm=True."]
+    return "\n".join(lines)
+
+
+def _h_bulk_organize(ctx, p):
+    ids = p.get("message_ids", [])
+    dest_name = _text(p, "destination_folder")
+    if not isinstance(ids, list) or not ids:
+        return "message_ids must be a non-empty list. No emails were moved."
+    if len(ids) > 25:
+        return "A single bulk operation is limited to 25 emails. No emails were moved."
+    if any(not isinstance(i, str) for i in ids):
+        return "Every message_id must be a string. No emails were moved."
+    if not dest_name:
+        return "Please provide destination_folder. No emails were moved."
+
+    unique = list(dict.fromkeys(_clean_id(i, "message ID") for i in ids if str(i).strip()))
+    if not unique:
+        return "No valid message IDs were provided."
+    dest_id, dest_display = _resolve_folder_or_stop(ctx, dest_name)
+
+    if not _approved(p):
+        return ("BULK EMAIL MOVE CONFIRMATION REQUIRED\n"
+                f"Emails selected: {len(unique)}\nDestination: {dest_display}\n\n"
+                "Selected message IDs:\n"
+                + "\n".join(f"{i}. {m}" for i, m in enumerate(unique, 1))
+                + "\n\nNo emails have been moved.\n"
+                  "Repeat the same action with confirm=True to proceed.")
+
+    moved, failed = ctx.emails.bulk_move(unique, dest_id)
+    lines = ["BULK EMAIL ORGANIZATION REPORT", f"Destination: {dest_display}",
+             f"Selected: {len(unique)}", f"Moved successfully: {len(moved)}",
+             f"Failed: {len(failed)}"]
+    if failed:
+        lines += ["", "FAILED MOVES:"]
+        lines += [f"{i}. Message ID: {f['id']}\n   Error: {f['error']}"
+                  for i, f in enumerate(failed, 1)]
+    return "\n".join(lines)
+
+
+# ------------------------------------------------------------------
+# FOLDERS
+# ------------------------------------------------------------------
+
+def _h_folders(ctx, p):
+    items = ctx.folders.list_folders(include_children=bool(p.get("include_children", True)))
+    if not items:
+        return "No Outlook folders were found."
+    lines = ["Your Outlook mail folders:"]
+    for f in items:
+        lines.append(f"- {f.get('_path') or f.get('displayName', 'Unnamed folder')} "
+                     f"[folder_id: {f.get('id')}]: {f.get('totalItemCount', 0)} emails, "
+                     f"{f.get('unreadItemCount', 0)} unread")
+    return "\n".join(lines)
+
+
+def _h_create_folder(ctx, p):
+    name = _text(p, "name")
+    if not name:
+        return "Please provide a folder name. No folder was created."
+    created = ctx.folders.create_folder(name, parent=_text(p, "parent_folder") or None)
+    return ("OUTLOOK FOLDER CREATED\n"
+            f"Folder: {created.get('displayName', name)}\nStatus: Created successfully.")
+
+
+def _h_rename_folder(ctx, p):
+    folder_id, new_name = _clean_id(p.get("folder_id"), "folder_id"), _text(p, "new_name")
+    if not new_name:
+        return "Please provide both folder_id and new_name. No folder was renamed."
+    ctx.folders.rename_folder(folder_id, new_name)
+    return f"OUTLOOK FOLDER RENAMED\nNew name: {new_name}\nStatus: Rename successful."
+
+
+def _h_delete_folder(ctx, p):
+    folder_id = _clean_id(p.get("folder_id"), "folder_id")
+    _require_approval(p, "Folder deletion")
+    ctx.folders.delete_folder(folder_id)
+    return f"OUTLOOK FOLDER DELETED\nFolder ID: {folder_id}\nStatus: Deleted successfully."
+
+
+def _h_read_folder(ctx, p):
+    folder = _text(p, "folder_id") or _text(p, "folder")
+    if not folder:
+        return "Please provide folder_id (or folder name) to read its emails."
+    items = ctx.emails.list_messages(folder, ctx.limit)
+    if not items:
+        return "No emails were found in the selected folder."
+    return _fmt_emails(f"OUTLOOK FOLDER EMAILS ({len(items)})", items)
+
+
+# ------------------------------------------------------------------
+# CALENDAR
+# ------------------------------------------------------------------
+
+def _fmt_event(i, ev):
+    start = ev.get("start", {}).get("dateTime", "Unknown")
+    end = ev.get("end", {}).get("dateTime", "Unknown")
+    loc = (ev.get("location") or {}).get("displayName", "")
+    attendees = [a.get("emailAddress", {}).get("address", "") for a in ev.get("attendees", [])]
+    row = (f"{i}. {ev.get('subject', 'Untitled event')}\n"
+           f"   Event ID: {ev.get('id')}\n   Start: {start}\n   End: {end}\n"
+           f"   Location: {loc or 'Not specified'}")
+    if attendees:
+        row += f"\n   Attendees: {', '.join(a for a in attendees if a)}"
+    if (ev.get("onlineMeeting") or {}).get("joinUrl"):
+        row += f"\n   Join: {ev['onlineMeeting']['joinUrl']}"
+    return row
+
+
+def _h_calendar(ctx, p):
+    tz = _text(p, "timezone") or None
+    start_text, end_text = _text(p, "start"), _text(p, "end")
+    if start_text:
+        start = start_text
+        end = end_text or (datetime.fromisoformat(start_text.replace("Z", "+00:00"))
+                           + timedelta(days=1)).isoformat()
+        label = f"between {start} and {end}"
+    else:
+        days = max(1, min(int(p.get("days", 7) or 7), 60))
+        now = datetime.now().astimezone()
+        start, end = now.isoformat(), (now + timedelta(days=days)).isoformat()
+        label = f"in the next {days} days"
+    items = ctx.calendar.get_events(start, end, limit=max(ctx.limit, 10), tz=tz)
+    if not items:
+        return f"You have no Outlook calendar events {label}."
+    return (f"Your Outlook calendar events {label}:\n\n"
+            + "\n\n".join(_fmt_event(i, e) for i, e in enumerate(items, 1)))
+
+
+def _h_event(ctx, p):
+    ev = ctx.calendar.get_event(_clean_id(p.get("event_id"), "event_id"))
+    body = (ev.get("body") or {}).get("content", "") or ev.get("bodyPreview", "")
+    return _fmt_event(1, ev) + (f"\n   Notes: {body[:1500]}" if body else "")
+
+
+def _h_create_event(ctx, p):
+    subject, start, end = _text(p, "subject"), _text(p, "start"), _text(p, "end")
+    if not subject or not start or not end:
+        return "Please provide subject, start and end (ISO 8601, e.g. 2026-12-01T10:00:00)."
+    attendees = _valid_addresses(p.get("attendees"), "attendee")
+    if attendees:
+        _require_approval(p, f"Creating this event and inviting {', '.join(attendees)}")
+    ev = ctx.calendar.create_event(
+        subject, start, end, timezone=_text(p, "timezone", "UTC"),
+        body=str(p.get("body") or ""), location=_text(p, "location"),
+        attendees=attendees, all_day=bool(p.get("all_day")),
+        online_meeting=bool(p.get("online_meeting")),
+        reminder_minutes=p.get("reminder_minutes"))
+    return (f"CALENDAR EVENT CREATED\nEvent ID: {ev.get('id')}\n"
+            f"Subject: {subject}\nStart: {start}\nEnd: {end}")
+
+
+def _h_update_event(ctx, p):
+    event_id = _clean_id(p.get("event_id"), "event_id")
+    _require_approval(p, "Updating this event")
+    tz = _text(p, "timezone", "UTC")
+    changes = {}
+    if _text(p, "subject"):
+        changes["subject"] = _text(p, "subject")
+    if _text(p, "start"):
+        changes["start"] = {"dateTime": _text(p, "start"), "timeZone": tz}
+    if _text(p, "end"):
+        changes["end"] = {"dateTime": _text(p, "end"), "timeZone": tz}
+    if "location" in p:
+        changes["location"] = {"displayName": _text(p, "location")}
+    if "body" in p:
+        changes["body"] = {"contentType": "Text", "content": str(p.get("body") or "")}
+    if not changes:
+        return "No changes were provided."
+    ctx.calendar.update_event(event_id, changes)
+    return "Calendar event updated."
+
+
+def _h_delete_event(ctx, p):
+    event_id = _clean_id(p.get("event_id"), "event_id")
+    _require_approval(p, "Deleting this event")
+    ctx.calendar.delete_event(event_id)
+    return "Calendar event deleted."
+
+
+def _h_respond_event(ctx, p):
+    event_id = _clean_id(p.get("event_id"), "event_id")
+    _require_approval(p, "Responding to this invitation")
+    ctx.calendar.respond(event_id, _text(p, "response"), _text(p, "comment"))
+    return f"Invitation response '{_text(p, 'response')}' sent."
+
+
+def _h_free_slots(ctx, p):
+    slots = ctx.calendar.find_free_slots(
+        days=max(1, min(int(p.get("days", 3) or 3), 14)),
+        duration_minutes=max(15, min(int(p.get("duration_minutes", 30) or 30), 480)),
+        work_start=int(p.get("work_start", 9)), work_end=int(p.get("work_end", 17)))
+    if not slots:
+        return "No free slots found in that window (times are UTC)."
+    return ("Free time slots (UTC, within working hours):\n"
+            + "\n".join(f"- {s:%a %d %b %H:%M} – {e:%H:%M}" for s, e in slots))
+
+
+# ------------------------------------------------------------------
+# CONTACTS
+# ------------------------------------------------------------------
+
+def _h_contacts(ctx, p):
+    items = (ctx.contacts.search_contacts(ctx.query, ctx.limit) if ctx.query
+             else ctx.contacts.list_contacts(ctx.limit))
+    if not items:
+        return "No matching Outlook contacts were found."
+    lines = ["Outlook contacts:"]
+    for i, c in enumerate(items, 1):
+        addrs = c.get("emailAddresses", [])
+        lines.append(f"{i}. {c.get('displayName', 'Unknown contact')}\n"
+                     f"   Contact ID: {c.get('id')}\n"
+                     f"   Email: {addrs[0].get('address', '') if addrs else 'Not available'}\n"
+                     f"   Phone: {c.get('mobilePhone') or 'Not available'}")
+    return "\n\n".join(lines)
+
+
+def _h_create_contact(ctx, p):
+    first = _text(p, "given_name") or _text(p, "name")
+    if not first:
+        return "Please provide the contact's given_name."
+    email = _text(p, "email")
+    if email:
+        _valid_addresses(email, "contact email")
+    c = ctx.contacts.create_contact(first, _text(p, "surname"), email,
+                                    _text(p, "phone"), _text(p, "company"))
+    return f"CONTACT CREATED: {c.get('displayName', first)}\nContact ID: {c.get('id')}"
+
+
+def _h_update_contact(ctx, p):
+    cid = _clean_id(p.get("contact_id"), "contact_id")
+    changes = {}
+    for src, dst in (("given_name", "givenName"), ("surname", "surname"),
+                     ("phone", "mobilePhone"), ("company", "companyName")):
+        if _text(p, src):
+            changes[dst] = _text(p, src)
+    if _text(p, "email"):
+        changes["emailAddresses"] = [{"address": _valid_addresses(p.get("email"), "email")[0]}]
+    if not changes:
+        return "No contact changes were provided."
+    ctx.contacts.update_contact(cid, changes)
+    return "Contact updated."
+
+
+def _h_delete_contact(ctx, p):
+    cid = _clean_id(p.get("contact_id"), "contact_id")
+    _require_approval(p, "Deleting this contact")
+    ctx.contacts.delete_contact(cid)
+    return "Contact deleted."
+
+
+# ------------------------------------------------------------------
+# ATTACHMENTS
+# ------------------------------------------------------------------
+
+def _h_attachments(ctx, p):
+    items = ctx.attachments.list_attachments(_clean_id(p.get("message_id"), "message ID"))
+    if not items:
+        return "This Outlook email has no attachments."
+    lines = ["Outlook email attachments:"]
+    for a in items:
+        lines.append(f"- {a.get('name', 'Unnamed attachment')} "
+                     f"[attachment_id: {a.get('id')}] "
+                     f"({a.get('size', 0)} bytes, {a.get('contentType') or a.get('@odata.type', 'unknown')})"
+                     + (" inline" if a.get("isInline") else ""))
+    return "\n".join(lines)
+
+
+def _h_download_attachment(ctx, p):
+    path = ctx.attachments.download_attachment(
+        _clean_id(p.get("message_id"), "message ID"),
+        _clean_id(p.get("attachment_id"), "attachment_id"),
+        save_directory=_text(p, "save_directory", "downloads/outlook"))
+    return f"Attachment saved to: {path}"
+
+
+def _h_attach_file(ctx, p):
+    draft_id = _clean_id(p.get("message_id"), "draft message ID")
+    file_path = _text(p, "file_path")
+    if not file_path:
+        return "Please provide file_path."
+    _require_approval(p, f"Attaching local file '{file_path}' to this draft")
+    ctx.attachments.upload_attachment(draft_id, file_path)
+    return f"File attached to the draft: {os.path.basename(file_path)}"
+
+
+# ------------------------------------------------------------------
+# MAILBOX / ACCOUNT
+# ------------------------------------------------------------------
+
+def _h_categories(ctx, p):
+    cats = ctx.mailbox.list_categories()
+    if not cats:
+        return "You have no Outlook categories."
+    return "Outlook categories:\n" + "\n".join(
+        f"- {c.get('displayName')} ({c.get('color')})" for c in cats)
+
+
+def _h_create_category(ctx, p):
+    name = _text(p, "name")
+    if not name:
+        return "Please provide a category name."
+    ctx.mailbox.create_category(name, _text(p, "color", "preset0"))
+    return f"Category '{name}' created."
+
+
+def _h_auto_reply(ctx, p):
+    s = ctx.mailbox.get_auto_reply()
+    return ("AUTOMATIC REPLIES\n"
+            f"Status: {s.get('status', 'unknown')}\n"
+            f"Audience: {s.get('externalAudience', 'unknown')}\n"
+            f"Internal message: {_clean_email_body(s.get('internalReplyMessage', ''), 'html')[:500] or '—'}")
+
+
+def _h_set_auto_reply(ctx, p):
+    enabled = bool(p.get("enabled", True))
+    _require_approval(p, "Changing your automatic replies")
+    ctx.mailbox.set_auto_reply(
+        enabled, _text(p, "message"), _text(p, "external_message") or None,
+        _text(p, "start") or None, _text(p, "end") or None, _text(p, "timezone", "UTC"))
+    return "Automatic replies " + ("enabled." if enabled else "disabled.")
+
+
+def _h_profile(ctx, p):
+    profile = ctx.graph.get_profile()
+    return ("Connected Outlook account:\n"
+            f"Name: {profile.get('displayName', 'Unknown')}\n"
+            f"Email: {profile.get('mail') or profile.get('userPrincipalName', 'Unknown')}")
+
+
+_HANDLERS = {
+    # read
+    "read": _h_read, "inbox": _h_read, "unread": _h_unread, "search": _h_search,
+    "filter": _h_filter, "read_email": _h_read_email, "thread": _h_thread,
+    # AI
+    "summarize": _h_summarize, "intelligence": _h_intelligence,
+    "draft_reply": _h_draft_reply, "draft_grouped_reply": _h_draft_grouped_reply,
+    "show_draft": _h_show_draft, "revise_reply": _h_revise_reply,
+    "send_reply": _h_send_reply,
+    # compose
+    "create_draft": _h_create_draft, "update_draft": _h_update_draft,
+    "list_drafts": _h_list_drafts, "send_draft": _h_send_draft,
+    "delete_draft": _h_delete_draft, "send_email": _h_send_email,
+    "reply": _h_reply, "forward": _h_forward,
+    # state
+    "mark_read": _simple_state("mark_as_read", "Marked as read."),
+    "mark_unread": _simple_state("mark_as_unread", "Marked as unread."),
+    "flag": _simple_state("flag_email", "Email flagged."),
+    "unflag": _simple_state("unflag_email", "Flag removed."),
+    "complete_flag": _simple_state("complete_flag", "Flag marked complete."),
+    "set_importance": _h_set_importance, "set_categories": _h_set_categories,
+    "archive": _h_archive, "delete_email": _h_delete_email,
+    "permanent_delete": _h_permanent_delete,
+    # organise
+    "move_email": _h_move_email, "preview_bulk_organize": _h_preview_bulk_organize,
+    "bulk_organize": _h_bulk_organize,
+    # folders
+    "folders": _h_folders, "create_folder": _h_create_folder,
+    "rename_folder": _h_rename_folder, "delete_folder": _h_delete_folder,
+    "read_folder": _h_read_folder,
+    # calendar
+    "calendar": _h_calendar, "event": _h_event, "create_event": _h_create_event,
+    "update_event": _h_update_event, "delete_event": _h_delete_event,
+    "respond_event": _h_respond_event, "free_slots": _h_free_slots,
+    # contacts
+    "contacts": _h_contacts, "create_contact": _h_create_contact,
+    "update_contact": _h_update_contact, "delete_contact": _h_delete_contact,
+    # attachments
+    "attachments": _h_attachments, "download_attachment": _h_download_attachment,
+    "attach_file": _h_attach_file,
+    # mailbox
+    "categories": _h_categories, "create_category": _h_create_category,
+    "auto_reply": _h_auto_reply, "set_auto_reply": _h_set_auto_reply,
+    "profile": _h_profile,
+}
+ALLOWED_ACTIONS = set(_HANDLERS) | {"login", "logout", "status"}
+
 
 def outlook_action(parameters, response=None, player=None):
     """
-    Outlook integration for Ghost.
+    Ghost Outlook integration (Microsoft Graph).
 
-    Outlook actions for Ghost, including email, folders, calendar,
-    contacts, attachments, AI summaries/replies, and confirmed moves.
-
-    Bulk organization always previews candidates first and requires
-    confirm=True before moving messages.
+    Reading is always allowed. Anything that sends, deletes, moves or changes
+    data is gated by the Ghost safety layer (_ghost_safety_approved) and, for
+    AI replies, by a draft-hash review step.
     """
-
     parameters = parameters or {}
     action = str(parameters.get("action", "read")).strip().lower()
 
-    allowed_actions = {
-        "read", "inbox", "unread", "search", "read_email",
-        "move_email", "preview_bulk_organize", "bulk_organize",
-        "folders", "create_folder", "rename_folder",
-        "delete_folder", "read_folder",
-        "calendar", "contacts", "attachments",
-        "profile", "summarize", "intelligence",
-        "draft_reply", "draft_grouped_reply",
-        "show_draft", "revise_reply", "send_reply"
-    }
-
-    if action not in allowed_actions:
-        return (
-            f"Outlook action '{action}' is not available. "
-            "This integration currently supports read-only operations."
-        )
+    if action not in ALLOWED_ACTIONS:
+        return (f"Outlook action '{action}' is not available. "
+                f"Available actions: {', '.join(sorted(ALLOWED_ACTIONS))}.")
 
     try:
-        # ----------------------------------------------------
-        # MICROSOFT AUTHENTICATION
-        # ----------------------------------------------------
-
-        auth = MicrosoftAuth()
-        access_token = auth.get_access_token()
-
-        if not access_token:
-            return (
-                "Your Microsoft Outlook session has expired or is not "
-                "connected. Please sign in to Outlook first."
-            )
-
-        graph = GraphClient(access_token)
-
-        emails = EmailService(graph)
-        folders = FolderService(graph)
-        calendar = CalendarService(graph)
-        contacts = ContactService(graph)
-        attachments = AttachmentService(graph)
-
-        limit = _limit(parameters.get("limit", 10))
-        query = str(parameters.get("query", "")).strip()
-        # OUTLOOK AI REPLY ACTIONS
-        if action == "draft_reply":
-            message_id = str(parameters.get("message_id", "")).strip()
-            if not message_id:
-                return "Please provide the Outlook message ID."
-
-            email = emails.get_email(message_id)
-            if not email:
-                return "Could not retrieve the selected email."
-
-            language = str(parameters.get("language", "English")).strip().lower()
-            language = "Bangla" if language in ("bangla", "bengali") else "English"
-
-            generation_source = "Gemini"
-
-            if parameters.get("local_only", False):
-                reply = _generate_local_reply(email, language)
-                generation_source = "Local"
-            else:
-                try:
-                    reply = _generate_reply_with_gemini(email, language)
-                except Exception as exc:
-                    print(
-                        f"[Outlook Draft] Gemini unavailable; "
-                        f"using local reply: {exc}"
-                    )
-                    reply = _generate_local_reply(email, language)
-                    generation_source = "Local fallback"
-
-            reply = _clean_local_reply_text(reply)
-
-            draft_id = uuid.uuid4().hex[:12]
-            _PENDING_REPLY_DRAFTS[draft_id] = {
-                "message_id": message_id,
-                "subject": str(email.get("subject") or "(No subject)").replace("\u00a0", " ").strip(),
-                "sender": _format_sender({
-                    "from": {"emailAddress": {
-                        "name": email.get("sender_name"),
-                        "address": email.get("sender_email")
-                    }}
-                }),
-                "language": language,
-                "body": reply,
-                "generation_source": generation_source,
-                "draft_hash": hashlib.sha256(reply.encode("utf-8")).hexdigest()
-            }
-
-            _save_pending_drafts()
-
-            return (
-                "OUTLOOK REPLY DRAFT CREATED Ã¢â‚¬â€ NOT SENT\n\n"
-                f"Draft ID: {draft_id}\n"
-                f"To: {_PENDING_REPLY_DRAFTS[draft_id]['sender']}\n"
-                f"Subject: Re: {_PENDING_REPLY_DRAFTS[draft_id]['subject']}\n\n"
-                f"{reply}\n\n"
-                "Review this draft. It has NOT been sent."
-            )
-
-        if action == "draft_grouped_reply":
-            message_id = str(parameters.get("message_id", "")).strip()
-            if not message_id:
-                return "Please provide the original Outlook message ID."
-
-            email = emails.get_email(message_id)
-            if not email:
-                return "Could not retrieve the selected email. No draft created."
-
-            raw_actions = parameters.get("required_actions", [])
-
-            if isinstance(raw_actions, str):
-                raw_actions = raw_actions.splitlines()
-
-            if not isinstance(raw_actions, (list, tuple)):
-                return "Required actions must be supplied as a list or text."
-
-            required_actions = []
-            for item in raw_actions:
-                action_text = str(item).strip().lstrip("-?* ").strip()
-                if action_text and action_text not in required_actions:
-                    required_actions.append(action_text[:500])
-
-            if not required_actions:
-                return "No required actions were provided. No draft created."
-
-            language = str(
-                parameters.get("language", "English")
-            ).strip().lower()
-            language = (
-                "Bangla"
-                if language in ("bangla", "bengali")
-                else "English"
-            )
-
-            deadline = str(parameters.get("deadline", "")).strip()
-
-            action_list = "\n".join(
-                f"- {item}" for item in required_actions
-            )
-
-            instruction = (
-                "Create ONE consolidated professional reply that "
-                "addresses every required action below. "
-                "Acknowledge the request, explain the intended next steps, "
-                "and avoid repeating the same commitment. "
-                "Do not claim that any task has already been completed. "
-                "Do not invent progress, results, or commitments beyond "
-                "the requested work.\n\n"
-                f"REQUIRED ACTIONS:\n{action_list}\n"
-                + (
-                    f"DEADLINE PROVIDED BY THE USER: {deadline}\n"
-                    if deadline else ""
-                )
-                + "\nWrite a concise reply in "
-                + language
-                + "."
-            )
-
-            generation_source = "Gemini"
-
-            if parameters.get("local_only", False):
-                reply = _generate_local_grouped_reply(
-                    email=email,
-                    required_actions=required_actions,
-                    language=language,
-                    deadline=deadline
-                )
-                generation_source = "Local"
-            else:
-                try:
-                    reply = _generate_reply_with_gemini(
-                        email,
-                        language,
-                        instruction
-                    )
-                except Exception as exc:
-                    print(
-                        "[Grouped Reply Draft] Gemini unavailable; "
-                        f"using safe local template: {exc}"
-                    )
-
-                    generation_source = "Local fallback"
-
-                    reply = _generate_local_grouped_reply(
-                        email=email,
-                        required_actions=required_actions,
-                        language=language,
-                        deadline=deadline
-                    )
-
-            reply = _clean_local_reply_text(reply)
-
-            draft_id = uuid.uuid4().hex[:12]
-            subject = str(
-                email.get("subject") or "(No subject)"
-            ).replace("\u00a0", " ").strip()
-
-            sender = _format_sender({
-                "from": {"emailAddress": {
-                    "name": email.get("sender_name"),
-                    "address": email.get("sender_email")
-                }}
-            })
-
-            _PENDING_REPLY_DRAFTS[draft_id] = {
-                "message_id": message_id,
-                "subject": subject,
-                "sender": sender,
-                "language": language,
-                "body": reply,
-                "required_actions": required_actions,
-                "draft_type": "grouped_reply",
-                "generation_source": generation_source,
-                "draft_hash": hashlib.sha256(
-                    reply.encode("utf-8")
-                ).hexdigest()
-            }
-
-            _save_pending_drafts()
-
-            return (
-                "CONSOLIDATED OUTLOOK REPLY DRAFT CREATED\n"
-                f"Draft ID: {draft_id}\n"
-                f"Subject: Re: {subject}\n"
-                f"Generation: {generation_source}\n"
-                "Required actions included:\n"
-                + "\n".join(
-                    f"- {item}" for item in required_actions
-                )
-                + "\n\nDRAFT:\n"
-                + reply
-                + "\n\n"
-                "Status: Saved for review. NOT SENT.\n"
-                f"Draft hash: {_PENDING_REPLY_DRAFTS[draft_id]['draft_hash']}"
-            )
-
-        if action == "show_draft":
-            draft_id = str(parameters.get("draft_id", "")).strip()
-            draft = _PENDING_REPLY_DRAFTS.get(draft_id)
-            if not draft:
-                return "Draft not found or expired. Please create a new draft."
-
-            return (
-                "PENDING OUTLOOK REPLY - NOT SENT\n\n"
-                f"Draft ID: {draft_id}\n"
-                f"Draft hash: {draft['draft_hash']}\n"
-                f"To: {draft['sender']}\n"
-                f"Subject: Re: {draft['subject']}\n\n"
-                f"{draft['body']}"
-            )
-
-        if action == "revise_reply":
-            draft_id = str(parameters.get("draft_id", "")).strip()
-            instruction = str(parameters.get("instruction", "")).strip()
-            draft = _PENDING_REPLY_DRAFTS.get(draft_id)
-
-            if not draft:
-                return "Draft not found or expired. Please create a new draft."
-            if not instruction:
-                return "Please provide instructions for revising the reply."
-
-            email = emails.get_email(draft["message_id"])
-
-            if not email:
-                return "Original email could not be retrieved. Draft unchanged."
-
-            generation_source = "Gemini"
-
-            if parameters.get("local_only", False):
-                revised = _revise_local_reply(
-                    draft["body"], instruction, email, draft["language"]
-                )
-                generation_source = "Local"
-            else:
-                try:
-                    revised = _generate_reply_with_gemini(
-                        email,
-                        draft["language"],
-                        instruction,
-                        draft["body"]
-                    )
-                except Exception as exc:
-                    print(
-                        "[Outlook Revision] Gemini unavailable; "
-                        f"trying local revision: {exc}"
-                    )
-                    revised = _revise_local_reply(
-                        draft["body"], instruction, email, draft["language"]
-                    )
-                    generation_source = "Local fallback"
-
-            revised = _clean_local_reply_text(revised)
-
-            draft["body"] = revised
-            draft["generation_source"] = generation_source
-            draft["draft_hash"] = hashlib.sha256(
-                revised.encode("utf-8")
-            ).hexdigest()
-
-            _save_pending_drafts()
-
-            return (
-                "OUTLOOK REPLY DRAFT REVISED\n"
-                "Status: Saved for review. NOT SENT.\n"
-                f"Draft ID: {draft_id}\n"
-                f"Generation source: {generation_source}\n"
-                f"Draft hash: {draft['draft_hash']}\n\n"
-                f"{draft['body']}"
-            )
-
-        if action == "send_reply":
-            draft_id = str(parameters.get("draft_id", "")).strip()
-            provided_hash = str(parameters.get("draft_hash", "")).strip()
-            draft = _PENDING_REPLY_DRAFTS.get(draft_id)
-
-            if not draft:
-                return "Draft not found or expired. No email was sent."
-
-            if not provided_hash or provided_hash != draft.get("draft_hash"):
-                return (
-                    "Draft version mismatch. No email was sent. "
-                    "Display the current draft and request confirmation again."
-                )
-
-            result = emails.reply_email(
-                draft["message_id"],
-                draft["body"]
-            )
-
-            del _PENDING_REPLY_DRAFTS[draft_id]
-            _save_pending_drafts()
-
-            return (
-                "Outlook reply sent successfully.\n"
-                f"Subject: Re: {draft['subject']}\n"
-                f"Recipient: {draft['sender']}"
-            )
-
-
-        # ----------------------------------------------------
-        # AI EMAIL SUMMARY
-        # ----------------------------------------------------
-
-        if action == "summarize":
-
-            message_id = str(
-                parameters.get("message_id", "")
-            ).strip()
-
-            language = str(
-                parameters.get("language", "English")
-            ).strip().lower()
-
-            if language in ("bangla", "bengali", "Ã Â¦Â¬Ã Â¦Â¾Ã Â¦â€šÃ Â¦Â²Ã Â¦Â¾"):
-                language = "Bangla"
-            else:
-                language = "English"
-
-            if not message_id:
-
-                latest = emails.get_latest_emails(1)
-
-                if not latest:
-                    return "Your Outlook inbox is empty."
-
-                email = latest[0]
-
-            else:
-                email = emails.get_email(message_id)
-
-            if not email:
-                return "Could not retrieve the email."
-
-            return _summarize_email_with_gemini(
-                email,
-                language
-            )
-
-        # ----------------------------------------------------
-        # ----------------------------------------------------
-        # AI INBOX INTELLIGENCE
-        # ----------------------------------------------------
-
-        if action == "intelligence":
-
-            language = str(
-                parameters.get("language", "English")
-            ).strip().lower()
-
-            language = (
-                "Bangla"
-                if language in ("bangla", "bengali")
-                else "English"
-            )
-
-            items = emails.get_latest_emails(limit)
-
-            if not items:
-                return "Your Outlook inbox is empty."
-
-            report = _analyze_inbox_with_gemini(
-                items,
-                language
-            )
-
-            try:
-                sent_items = emails.get_recent_sent_emails(
-                    max(limit * 2, 20)
-                )
-
-                profile = graph.get_profile() or {}
-                own_addresses = {
-                    profile.get("mail"),
-                    profile.get("userPrincipalName")
-                }
-
-                pending_replies = _detect_pending_replies(
-                    items,
-                    sent_items,
-                    own_addresses
-                )
-
-                if language == "Bangla":
-                    section = [
-                        "\\n\\n???????? ????? ????????? ???????",
-                        "================================",
-                        f"???????? ????? ???????: {len(pending_replies)}"
-                    ]
-                    if pending_replies:
-                        for email in pending_replies:
-                            section.append(
-                                "- {0} | {1} | {2}".format(
-                                    email.get("subject") or "(???? ???)",
-                                    email.get("sender_name") or email.get("sender_email") or "????? ??????",
-                                    email.get("received_at") or "??? ?????"
-                                )
-                            )
-                    else:
-                        section.append("?????????? ?????? ????? ????????? ??????? ????? ??????")
-                else:
-                    section = [
-                        "\\n\\nPOTENTIALLY AWAITING YOUR REPLY",
-                        "=================================",
-                        f"Potential conversations: {len(pending_replies)}"
-                    ]
-                    if pending_replies:
-                        for email in pending_replies:
-                            section.append(
-                                "- {0} | {1} | {2}".format(
-                                    email.get("subject") or "(No subject)",
-                                    email.get("sender_name") or email.get("sender_email") or "Unknown sender",
-                                    email.get("received_at") or "Unknown time"
-                                )
-                            )
-                    else:
-                        section.append("No potentially unanswered conversations found in the recent messages.")
-
-                section.append(
-                    "This is a local conversation/timestamp check, not confirmation that a reply is required."
-                )
-                return report + "\\n" + "\\n".join(section)
-
-            except Exception as error:
-                return (
-                    report
-                    + "\\n\\nREPLY DETECTION UNAVAILABLE\\n"
-                    + "Sent Items comparison could not be completed: "
-                    + str(error)
-                )
-        # EMAIL INBOX
-        # ----------------------------------------------------
-
-        if action in ("read", "inbox"):
-
-            items = emails.get_latest_emails(limit)
-
-            if not items:
-                return "Your Outlook inbox is empty."
-
-            lines = [
-                f"Latest {len(items)} Outlook emails:"
-            ]
-
-            for index, item in enumerate(items, 1):
-
-                lines.append(
-                    f"{index}. {item['subject']}\n"
-                    f"   Message ID: {item.get('id')}\n"
-                    f"   From: "
-                    f"{_format_sender({'from': {'emailAddress': {'name': item.get('sender_name'), 'address': item.get('sender_email')}}})}\n"
-                    f"   Received: {item.get('received_at', 'Unknown')}\n"
-                    f"   Status: {'Read' if item.get('is_read') else 'Unread'}\n"
-                    f"   Preview: {item.get('preview') or 'No preview'}"
-                )
-
-            return "\n\n".join(lines)
-
-        # ----------------------------------------------------
-        # UNREAD EMAILS
-        # ----------------------------------------------------
-
-        if action == "unread":
-
-            items = emails.get_unread_emails(limit)
-
-            if not items:
-                return "You have no unread Outlook emails."
-
-            lines = [
-                f"You have {len(items)} unread Outlook emails:"
-            ]
-
-            for index, item in enumerate(items, 1):
-
-                lines.append(
-                    f"{index}. {item['subject']}\n"
-                    f"   Message ID: {item.get('id')}\n"
-                    f"   From: {item.get('sender_name') or item.get('sender_email')}\n"
-                    f"   Received: {item.get('received_at')}\n"
-                    f"   Preview: {item.get('preview') or 'No preview'}"
-                )
-
-            return "\n\n".join(lines)
-
-        # ----------------------------------------------------
-        # SEARCH EMAILS
-        # ----------------------------------------------------
-
-        if action == "search":
-
-            if not query:
-                return (
-                    "Please provide a search keyword for Outlook emails."
-                )
-
-            items = emails.search_emails(query, limit)
-
-            if not items:
-                return f"No Outlook emails found for '{query}'."
-
-            lines = [
-                f"Found {len(items)} Outlook emails for '{query}':"
-            ]
-
-            for index, item in enumerate(items, 1):
-
-                lines.append(
-                    f"{index}. {item['subject']}\n"
-                    f"   Message ID: {item.get('id')}\n"
-                    f"   From: {item.get('sender_name') or item.get('sender_email')}\n"
-                    f"   Received: {item.get('received_at')}\n"
-                    f"   Preview: {item.get('preview') or 'No preview'}"
-                )
-
-            return "\n\n".join(lines)
-
-        # ----------------------------------------------------
-        # READ COMPLETE EMAIL
-        # ----------------------------------------------------
-
-        if action == "move_email":
-            message_id = str(
-                parameters.get("message_id", "")
-            ).strip()
-
-            destination_name = str(
-                parameters.get("destination_folder", "")
-            ).strip()
-
-            destination_id = str(
-                parameters.get("destination_folder_id", "")
-            ).strip()
-
-            if not message_id:
-                return "Please provide the email message_id. No email was moved."
-
-            if not destination_name and not destination_id:
-                return (
-                    "Please provide destination_folder or "
-                    "destination_folder_id. No email was moved."
-                )
-
-            if parameters.get("_ghost_safety_approved") is not True:
-                return (
-                    "Email movement requires explicit confirmation. "
-                    "No email was moved. Repeat with confirm=True."
-                )
-
-            # Resolve folder name to its actual Microsoft Graph ID.
-            if destination_name:
-                available_folders = folders.list_folders()
-
-                matched_folder = next(
-                    (
-                        folder for folder in available_folders
-                        if str(folder.get("displayName", "")).strip().casefold()
-                        == destination_name.casefold()
-                    ),
-                    None
-                )
-
-                if not matched_folder:
-                    names = [
-                        folder.get("displayName", "Unnamed")
-                        for folder in available_folders
-                    ]
-
-                    return (
-                        f"Destination folder '{destination_name}' was not found. "
-                        f"Available folders: {', '.join(names)}. "
-                        "No email was moved."
-                    )
-
-                destination_id = str(
-                    matched_folder.get("id", "")
-                ).strip()
-
-                destination_name = matched_folder.get(
-                    "displayName", destination_name
-                )
-
-            if not destination_id:
-                return "Destination folder ID is unavailable. No email was moved."
-
-            email = emails.get_email(message_id)
-
-            if not email:
-                return "Could not retrieve the requested email. No email was moved."
-
-            subject = email.get("subject") or "(No subject)"
-
-            emails.move_email(message_id, destination_id)
-
-            return (
-                "OUTLOOK EMAIL MOVED SUCCESSFULLY\n"
-                f"Subject: {subject}\n"
-                f"Destination: {destination_name or destination_id}\n"
-                "Status: Move completed."
-            )
-
-
-        # ----------------------------------------------------
-        # BULK EMAIL ORGANIZATION: PREVIEW
-        # ----------------------------------------------------
-
-        if action == "preview_bulk_organize":
-            organize_by = str(
-                parameters.get("organize_by", "")
-            ).strip().lower()
-
-            value = str(parameters.get("value", "")).strip()
-            destination_name = str(
-                parameters.get("destination_folder", "")
-            ).strip()
-
-            if organize_by not in ("sender", "subject"):
-                return (
-                    "organize_by must be 'sender' or 'subject'. "
-                    "No emails were moved."
-                )
-
-            if not value:
-                return "Please provide a sender or subject value."
-
-            if not destination_name:
-                return "Please provide a destination_folder."
-
-            available_folders = folders.list_folders()
-            matched_folder = next(
-                (
-                    folder for folder in available_folders
-                    if str(folder.get("displayName", "")).strip().casefold()
-                    == destination_name.casefold()
-                ),
-                None
-            )
-
-            if not matched_folder:
-                return (
-                    f"Destination folder '{destination_name}' was not found. "
-                    "No emails were moved."
-                )
-
-            items = emails.search_emails(value, limit)
-            target = value.casefold()
-
-            if organize_by == "sender":
-                search_matches = [
-                    item for item in items
-                    if str(item.get("sender_email") or "").casefold() == target
-                    or str(item.get("sender_name") or "").casefold() == target
-                ]
-            else:
-                search_matches = [
-                    item for item in items
-                    if target in str(item.get("subject") or "").casefold()
-                ]
-
-            destination_id = str(matched_folder.get("id", "")).strip()
-            already_in_destination = [
-                item for item in search_matches
-                if item.get("parent_folder_id") == destination_id
-            ]
-            matches = [
-                item for item in search_matches
-                if item.get("parent_folder_id") != destination_id
-            ]
-
-            if not matches:
-                if already_in_destination:
-                    return (
-                        f"Found {len(already_in_destination)} matching email(s), "
-                        f"but all are already in '{matched_folder.get('displayName')}'. "
-                        "No emails were moved."
-                    )
-                return (
-                    f"No emails matched {organize_by} '{value}'. "
-                    "No emails were moved."
-                )
-
-            lines = [
-                "BULK ORGANIZATION PREVIEW",
-                f"Organize by: {organize_by}",
-                f"Search value: {value}",
-                f"Destination: {matched_folder.get('displayName')}",
-                f"Matching emails to move: {len(matches)}",
-                f"Already in destination (skipped): {len(already_in_destination)}",
-                "",
-                "REVIEW THESE EMAILS:"
-            ]
-
-            for index, item in enumerate(matches, 1):
-                lines.append(
-                    f"{index}. {item.get('subject') or '(No subject)'}\n"
-                    f"   From: {item.get('sender_email') or item.get('sender_name')}\n"
-                    f"   Message ID: {item.get('id')}"
-                )
-
-            lines.extend([
-                "",
-                "No emails have been moved.",
-                "To proceed, pass the listed message IDs to "
-                "bulk_organize with confirm=True."
-            ])
-
-            return "\n".join(lines)
-
-        # ----------------------------------------------------
-        # BULK EMAIL ORGANIZATION: EXECUTE
-        # ----------------------------------------------------
-
-        if action == "bulk_organize":
-            message_ids = parameters.get("message_ids", [])
-            destination_name = str(
-                parameters.get("destination_folder", "")
-            ).strip()
-
-            if not isinstance(message_ids, list) or not message_ids:
-                return (
-                    "message_ids must be a non-empty list. "
-                    "No emails were moved."
-                )
-
-            if len(message_ids) > 25:
-                return (
-                    "A single bulk operation is limited to 25 emails. "
-                    "No emails were moved."
-                )
-
-            if any(not isinstance(item, str) for item in message_ids):
-                return (
-                    "Every message_id must be a string. "
-                    "No emails were moved."
-                )
-
-            if not destination_name:
-                return (
-                    "Please provide destination_folder. "
-                    "No emails were moved."
-                )
-
-            # Remove empty and duplicate IDs while preserving order.
-            unique_ids = []
-            seen_ids = set()
-
-            for message_id in message_ids:
-                message_id = str(message_id).strip()
-                if message_id and message_id not in seen_ids:
-                    seen_ids.add(message_id)
-                    unique_ids.append(message_id)
-
-            if not unique_ids:
-                return "No valid message IDs were provided."
-
-            available_folders = folders.list_folders()
-            matched_folder = next(
-                (
-                    folder for folder in available_folders
-                    if str(folder.get("displayName", "")).strip().casefold()
-                    == destination_name.casefold()
-                ),
-                None
-            )
-
-            if not matched_folder:
-                return (
-                    f"Destination folder '{destination_name}' was not found. "
-                    "No emails were moved."
-                )
-
-            destination_id = str(matched_folder.get("id", "")).strip()
-            destination_name = matched_folder.get("displayName", destination_name)
-
-            if not destination_id:
-                return "Destination folder ID is unavailable. No emails were moved."
-
-            if parameters.get("_ghost_safety_approved") is not True:
-                lines = [
-                    "BULK EMAIL MOVE CONFIRMATION REQUIRED",
-                    f"Emails selected: {len(unique_ids)}",
-                    f"Destination: {destination_name}",
-                    "",
-                    "Selected message IDs:"
-                ]
-                lines.extend(
-                    f"{index}. {message_id}"
-                    for index, message_id in enumerate(unique_ids, 1)
-                )
-                lines.extend([
-                    "",
-                    "No emails have been moved.",
-                    "Repeat the same action with confirm=True to proceed."
-                ])
-                return "\n".join(lines)
-
-            moved = []
-            failed = []
-            skipped = []
-
-            for message_id in unique_ids:
-                try:
-                    email = emails.get_email(message_id)
-
-                    if not email:
-                        raise ValueError("Email could not be retrieved.")
-
-                    subject = email.get("subject") or "(No subject)"
-                    sender = (
-                        email.get("sender_email")
-                        or email.get("sender_name")
-                        or "Unknown sender"
-                    )
-
-                    emails.move_email(message_id, destination_id)
-
-                    moved.append({
-                        "id": message_id,
-                        "subject": subject,
-                        "sender": sender
-                    })
-
-                except Exception as exc:
-                    failed.append({
-                        "id": message_id,
-                        "error": str(exc)
-                    })
-
-            lines = [
-                "BULK EMAIL ORGANIZATION REPORT",
-                f"Destination: {destination_name}",
-                f"Selected: {len(unique_ids)}",
-                f"Moved successfully: {len(moved)}",
-                f"Already in destination (skipped): {len(skipped)}",
-                f"Failed: {len(failed)}",
-                "",
-                "SUCCESSFUL MOVES:"
-            ]
-
-            if moved:
-                for index, item in enumerate(moved, 1):
-                    lines.append(
-                        f"{index}. {item['subject']} | "
-                        f"From: {item['sender']}"
-                    )
-            else:
-                lines.append("None")
-
-            lines.extend(["", "ALREADY IN DESTINATION (SKIPPED):"])
-            if skipped:
-                for index, item in enumerate(skipped, 1):
-                    lines.append(f"{index}. {item['subject']}")
-            else:
-                lines.append("None")
-
-            lines.extend(["", "FAILED MOVES:"])
-
-            if failed:
-                for index, item in enumerate(failed, 1):
-                    lines.append(
-                        f"{index}. Message ID: {item['id']}\n"
-                        f"   Error: {item['error']}"
-                    )
-            else:
-                lines.append("None")
-
-            return "\n".join(lines)
-
-
-        if action == "read_email":
-
-            message_id = str(
-                parameters.get("message_id", "")
-            ).strip()
-
-            if not message_id:
-                return (
-                    "Please provide the Outlook message ID "
-                    "to read the complete email."
-                )
-
-            email = emails.get_email(message_id)
-
-            if not email:
-                return "Could not retrieve the requested email."
-
-            body = _clean_email_body(
-                email.get("body", ""),
-                email.get("body_type", "")
-            )
-
-            if not body:
-                body = "No readable email body."
-
-            body = body[:12000]
-
-            return (
-                "COMPLETE OUTLOOK EMAIL\n\n"
-                f"Subject: {email.get('subject')}\n"
-                f"From: {email.get('sender_name')} "
-                f"<{email.get('sender_email')}>\n"
-                f"Received: {email.get('received_at')}\n"
-                f"Importance: {email.get('importance')}\n"
-                f"Status: {'Read' if email.get('is_read') else 'Unread'}\n"
-                f"Has attachments: {email.get('has_attachments')}\n\n"
-                f"EMAIL BODY:\n{body}"
-            )
-
-        # ----------------------------------------------------
-        # MAIL FOLDERS
-        # ----------------------------------------------------
-
-        if action == "folders":
-
-            items = folders.list_folders()
-
-            if not items:
-                return "No Outlook folders were found."
-
-            lines = ["Your Outlook mail folders:"]
-
-            for item in items:
-                folder_id = str(item.get("id", "")).strip()
-
-                lines.append(
-                    f"- {item.get('displayName', 'Unnamed folder')} "
-                    f"[folder_id: {folder_id}]: "
-                    f"{item.get('totalItemCount', 0)} emails, "
-                    f"{item.get('unreadItemCount', 0)} unread"
-                )
-
-            return "\n".join(lines)
-
-        if action == "create_folder":
-            name = str(parameters.get("name", "")).strip()
-
-            if not name:
-                return "Please provide a folder name. No folder was created."
-
-            created = folders.create_folder(name)
-            created_name = created.get("displayName", name)
-
-            return (
-                "OUTLOOK FOLDER CREATED\n"
-                f"Folder: {created_name}\n"
-                "Status: Created successfully."
-            )
-
-        if action == "rename_folder":
-            folder_id = str(parameters.get("folder_id", "")).strip()
-            new_name = str(parameters.get("new_name", "")).strip()
-
-            if not folder_id or not new_name:
-                return (
-                    "Please provide both folder_id and new_name. "
-                    "No folder was renamed."
-                )
-
-            folders.rename_folder(folder_id, new_name)
-
-            return (
-                "OUTLOOK FOLDER RENAMED\n"
-                f"New name: {new_name}\n"
-                "Status: Rename successful."
-            )
-
-        if action == "delete_folder":
-            folder_id = str(parameters.get("folder_id", "")).strip()
-
-            if not folder_id:
-                return "Please provide folder_id. No folder was deleted."
-
-            if parameters.get("_ghost_safety_approved") is not True:
-                return (
-                    "Folder deletion requires explicit confirmation. "
-                    "No folder was deleted. "
-                    "Repeat the action with confirm=True to proceed."
-                )
-
-            folders.delete_folder(folder_id)
-
-            return (
-                "OUTLOOK FOLDER DELETED\n"
-                f"Folder ID: {folder_id}\n"
-                "Status: Deleted successfully."
-            )
-
-        if action == "read_folder":
-            folder_id = str(parameters.get("folder_id", "")).strip()
-
-            if not folder_id:
-                return "Please provide folder_id to read its emails."
-
-            items = folders.get_folder_messages(
-                folder_id,
-                limit=limit
-            )
-
-            if not items:
-                return "No emails were found in the selected folder."
-
-            lines = [
-                f"OUTLOOK FOLDER EMAILS ({len(items)})",
-                ""
-            ]
-
-            for index, item in enumerate(items, start=1):
-                sender_data = item.get("from") or {}
-                sender_info = sender_data.get("emailAddress") or {}
-                sender = (
-                    sender_info.get("name")
-                    or sender_info.get("address")
-                    or "Unknown sender"
-                )
-
-                subject = item.get("subject") or "(No subject)"
-                received = item.get("receivedDateTime") or "Unknown date"
-                read_status = (
-                    "Read" if item.get("isRead") else "Unread"
-                )
-
-                lines.append(
-                    f"{index}. {subject}\n"
-                    f"   From: {sender}\n"
-                    f"   Received: {received}\n"
-                    f"   Status: {read_status}"
-                )
-
-            return "\n".join(lines)
-
-        # ----------------------------------------------------
-        # CALENDAR
-        # ----------------------------------------------------
-
-        if action == "calendar":
-
-            start = datetime.now().astimezone()
-            end = start + timedelta(days=7)
-
-            items = calendar.get_events(
-                start.isoformat(),
-                end.isoformat(),
-                limit=limit
-            )
-
-            if not items:
-                return (
-                    "You have no Outlook calendar events "
-                    "in the next 7 days."
-                )
-
-            lines = [
-                "Your upcoming Outlook calendar events:"
-            ]
-
-            for index, item in enumerate(items, 1):
-
-                event_start = item.get(
-                    "start", {}
-                ).get("dateTime", "Unknown")
-
-                event_end = item.get(
-                    "end", {}
-                ).get("dateTime", "Unknown")
-
-                location = item.get(
-                    "location", {}
-                ).get("displayName", "")
-
-                lines.append(
-                    f"{index}. {item.get('subject', 'Untitled event')}\n"
-                    f"   Start: {event_start}\n"
-                    f"   End: {event_end}\n"
-                    f"   Location: {location or 'Not specified'}"
-                )
-
-            return "\n\n".join(lines)
-
-        # ----------------------------------------------------
-        # CONTACTS
-        # ----------------------------------------------------
-
-        if action == "contacts":
-
-            if query:
-                items = contacts.search_contacts(query, limit)
-            else:
-                items = contacts.list_contacts(limit)
-
-            if not items:
-                return "No matching Outlook contacts were found."
-
-            lines = ["Outlook contacts:"]
-
-            for index, item in enumerate(items, 1):
-
-                addresses = item.get("emailAddresses", [])
-
-                email = (
-                    addresses[0].get("address", "")
-                    if addresses else ""
-                )
-
-                lines.append(
-                    f"{index}. {item.get('displayName', 'Unknown contact')}\n"
-                    f"   Email: {email or 'Not available'}\n"
-                    f"   Phone: {item.get('mobilePhone') or 'Not available'}"
-                )
-
-            return "\n\n".join(lines)
-
-        # ----------------------------------------------------
-        # ATTACHMENTS
-        # ----------------------------------------------------
-
-        if action == "attachments":
-
-            message_id = str(
-                parameters.get("message_id", "")
-            ).strip()
-
-            if not message_id:
-                return (
-                    "Please provide an Outlook message ID to inspect "
-                    "its attachments."
-                )
-
-            items = attachments.list_attachments(message_id)
-
-            if not items:
-                return "This Outlook email has no attachments."
-
-            lines = ["Outlook email attachments:"]
-
-            for item in items:
-
-                size = item.get("size", 0)
-
-                lines.append(
-                    f"- {item.get('name', 'Unnamed attachment')} "
-                    f"({size} bytes, "
-                    f"{item.get('@odata.type', 'unknown type')})"
-                )
-
-            return "\n".join(lines)
-
-        # ----------------------------------------------------
-        # PROFILE
-        # ----------------------------------------------------
-
-        if action == "profile":
-
-            profile = graph.get_profile()
-
-            return (
-                "Connected Outlook account:\n"
-                f"Name: {profile.get('displayName', 'Unknown')}\n"
-                f"Email: {profile.get('mail') or profile.get('userPrincipalName', 'Unknown')}"
-            )
-
+        auth = get_auth()
+
+        if action == "login":
+            auth.login()
+            return f"Signed in to Outlook as {auth.get_account_name() or 'your account'}."
+        if action == "logout":
+            auth.logout()
+            return "Signed out of Outlook. Stored tokens were removed."
+        if action == "status":
+            who = auth.get_account_name()
+            return (f"Outlook is connected as {who}." if auth.is_authenticated()
+                    else "Outlook is not connected or the session expired. Use action='login'.")
+
+        if not auth.get_access_token():
+            return ("Your Microsoft Outlook session has expired or is not connected. "
+                    "Use action='login' (or sign in to Outlook) first.")
+
+        graph = GraphClient(token_provider=auth.get_access_token)
+        ctx = SimpleNamespace(
+            auth=auth, graph=graph,
+            emails=EmailService(graph), folders=FolderService(graph),
+            calendar=CalendarService(graph), contacts=ContactService(graph),
+            attachments=AttachmentService(graph), mailbox=MailboxService(graph),
+            limit=_limit(parameters.get("limit", 10)),
+            query=_text(parameters, "query"),
+        )
+        return _HANDLERS[action](ctx, parameters) or "Outlook request completed."
+
+    except _Stop as stop:
+        return str(stop)
+    except GraphAPIError as error:
+        print(f"[Outlook Action Error] {action}: {error}")
+        hint = ""
+        if error.status == 401:
+            hint = " Your session may have expired; try action='login'."
+        elif error.status == 403:
+            hint = (" Permission denied. If you recently updated Ghost, sign in again "
+                    "(action='login') to grant the new permissions.")
+        elif error.status == 404:
+            hint = " The item was not found (it may have been moved or deleted)."
+        return f"I couldn't complete the Outlook request ({action}). {error}.{hint}"
     except Exception as error:
-
-        print(
-            f"[Outlook Action Error] "
-            f"{type(error).__name__}: {error}"
-        )
-
-        return (
-            "I couldn't complete the Outlook request. "
-            f"Error: {type(error).__name__}: {error}"
-        )
-
-    return "Outlook request completed."
-
-
-
-
+        print(f"[Outlook Action Error] {action}: {type(error).__name__}: {error}")
+        return (f"I couldn't complete the Outlook request ({action}). "
+                f"Error: {type(error).__name__}: {error}")

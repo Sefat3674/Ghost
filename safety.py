@@ -201,6 +201,20 @@ _ACTION_RISK = {
         "move_email": Risk.HIGH,
         "bulk_organize": Risk.HIGH,
         "delete_folder": Risk.HIGH,
+        "send_email": Risk.HIGH,
+        "reply": Risk.HIGH,
+        "forward": Risk.HIGH,
+        "send_draft": Risk.HIGH,
+        "delete_draft": Risk.HIGH,
+        "delete_email": Risk.HIGH,
+        "permanent_delete": Risk.HIGH,
+        "attach_file": Risk.HIGH,
+        "update_event": Risk.HIGH,
+        "delete_event": Risk.HIGH,
+        "respond_event": Risk.HIGH,
+        "delete_contact": Risk.HIGH,
+        "set_auto_reply": Risk.HIGH,
+        "create_event": Risk.HIGH,
         None: Risk.LOW,
     },
     "task_manager": {
@@ -391,6 +405,13 @@ def describe(name: str, args: dict | None) -> str:
     """Short human-readable description of what an action will do."""
     args = args or {}
     action = str(args.get("action", "")).lower().strip()
+
+    if name == "outlook" and action == "send_reply":
+        draft_id = str(args.get("draft_id", "")).strip()
+        return (
+            f"send the reviewed Outlook reply draft (draft ID: {draft_id})"
+            if draft_id else "send the reviewed Outlook reply draft (draft ID missing)"
+        )
 
     if name == "personal_outlook":
         action = str(args.get("action", "")).lower().strip()

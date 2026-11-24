@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -7,6 +7,7 @@ import main
 import safety
 from integrations import personal_outlook_mcp as outlook
 from safety import _fingerprint, issue_confirmation_token
+from agent.outlook_approval import OUTLOOK_APPROVAL_CAPABILITY
 
 
 class PersonalOutlookDispatchTests(unittest.TestCase):
@@ -477,6 +478,63 @@ class PersonalOutlookDispatchTests(unittest.TestCase):
         ) as approved:
             asyncio.run(run())
             approved.assert_not_called()
+
+
+    def test_telegram_legacy_send_reply_passes_approval_and_cleans_state(self):
+        live = main.GHOSTLive(MagicMock())
+        args = {
+            "action": "send_reply",
+            "draft_id": "MOCK_DRAFT_ID",
+            "draft_hash": "mock-draft-hash",
+        }
+
+        fingerprint = _fingerprint("outlook", args)
+        token = issue_confirmation_token("outlook", args)
+        captured = []
+
+        live._approved_human_fingerprint = fingerprint
+        live._pending_human_fingerprint = fingerprint
+        live._pending_confirmation_token = token
+        live._pending_human_action = {
+            "name": "outlook",
+            "args": dict(args),
+        }
+        live._awaiting_human_confirmation = True
+        live._human_confirmed = True
+
+        def mock_outlook_handler(received_args):
+            captured.append(dict(received_args))
+            return "mock-handler-success"
+
+        fc = SimpleNamespace(
+            id="mock-legacy-send-reply",
+            name="outlook",
+            args={
+                **args,
+                "confirm": True,
+                "confirm_token": token,
+            },
+        )
+
+        async def run():
+            with patch.dict(
+                live._tool_handlers,
+                {"outlook": (mock_outlook_handler, 10)},
+            ):
+                return await live._execute_tool(fc)
+
+        result = asyncio.run(run())
+
+        self.assertTrue(result.response["result"] == "mock-handler-success")
+        self.assertEqual(len(captured), 1)
+        self.assertIs(captured[0].get("_ghost_safety_approved"), OUTLOOK_APPROVAL_CAPABILITY)
+
+        self.assertIsNone(live._approved_human_fingerprint)
+        self.assertIsNone(live._pending_confirmation_token)
+        self.assertIsNone(live._pending_human_fingerprint)
+        self.assertIsNone(live._pending_human_action)
+        self.assertFalse(live._awaiting_human_confirmation)
+        self.assertFalse(live._human_confirmed)
 
 
 if __name__ == "__main__":
