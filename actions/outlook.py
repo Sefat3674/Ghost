@@ -1868,7 +1868,12 @@ def _compose_fields(p):
         raise _Stop("Please provide at least one recipient in 'to'.")
     cc = _valid_addresses(p.get("cc"), "Cc")
     bcc = _valid_addresses(p.get("bcc"), "Bcc")
-    return to, cc, bcc, _text(p, "subject"), str(p.get("body") or ""), bool(p.get("html"))
+
+    html = p.get("html", False)
+    if not isinstance(html, bool):
+        raise _Stop("Invalid 'html' value. Use true or false.")
+
+    return to, cc, bcc, _text(p, "subject"), str(p.get("body") or ""), html
 
 
 def _h_create_draft(ctx, p):
@@ -2490,6 +2495,16 @@ def outlook_action(parameters, response=None, player=None):
     except GraphAPIError as error:
         print(f"[Outlook Action Error] {action}: {error}")
         hint = ""
+        if action == "send_email" and (
+            "timed out" in str(error).lower()
+            or "network error" in str(error).lower()
+        ):
+            hint = (
+                " Delivery status is uncertain: Microsoft Graph may have "
+                "accepted the email before the connection failed. Check "
+                "Outlook Sent Items before considering another attempt; "
+                "do not retry blindly."
+            )
         if error.status == 401:
             hint = " Your session may have expired; try action='login'."
         elif error.status == 403:

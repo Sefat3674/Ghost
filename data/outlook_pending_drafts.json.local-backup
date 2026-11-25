@@ -1,0 +1,97 @@
+{
+  "03cf7618193a": {
+    "message_id": "AQMkADAwATM3ZmYAZS0yOWM3LWI4NDUtMDACLTAwCgBGAAADFGxjp50S5ESyn4POswThzQcAAACv-qgOdQxLmBXMl-zWPZgAAAIBCQAAAa-_qA51DEuYFcyX-NY9mAAGW20-FwAAAA==",
+    "subject": "Ghost Outlook Integration Test",
+    "sender": "Sefat Ahmed <outlook_4DFD43A26DE806C3@outlook.com>",
+    "language": "English",
+    "body": "Hi Sefat,\n\nThank you for your message. This reply confirms that your test email was successfully received by the Ghost AI Assistant.\n\nPlease let me know if you need any further assistance.\n\nBest regards,\n\nGhost AI Assistant",
+    "draft_hash": "69436bba8617fafd2f7affc2eb86646382a634cda5cc4183945193d821039d69"
+  },
+  "cb794e56fe93": {
+    "message_id": "AQMkADAwATM3ZmYAZS0yOWM3LWI4NDUtMDACLTAwCgBGAAADFGxjp50S5ESyn4POswThzQcAAACv-qgOdQxLmBXMl-zWPZgAAAIBCQAAAa-_qA51DEuYFcyX-NY9mAAGW20-FwAAAA==",
+    "subject": "Ghost Outlook Integration Test",
+    "sender": "Sefat Ahmed <outlook_4DFD43A26DE806C3@outlook.com>",
+    "language": "English",
+    "body": "Hi Sefat,\n\nThank you for your message. I am confirming that your test email has been received successfully. \n\nPlease let me know if you need any further assistance.\n\nBest regards,  \nGhost AI Assistant",
+    "draft_hash": "262dd42b07dd0a1678c78897836a3159cc30a9fa495e415133285cca901921ef"
+  },
+  "c512042fe7b3": {
+    "message_id": "AQMkADAwATM3ZmYAZS0yOWM3LWI4NDUtMDACLTAwCgBGAAADFGxjp50S5ESyn4POswThzQcAAACv-qgOdQxLmBXMl-zWPZgAAAIBDAAAAa-_qA51DEuYFcyX-NY9mAAGW2z5tAAAAA==",
+    "subject": "URGENT: Project Review Required – Deadline Test",
+    "sender": "sefat ahmed akkhor <sefatahmed3674@gmail.com>",
+    "language": "English",
+    "body": "Dear sefat ahmed akkhor,\n\nThank you for your email and for sharing the requested actions. I will review the project deployment checklist, verify release readiness, and provide a consolidated confirmation after completing the review.\n\nThank you for your time and consideration.\n\nBest regards",
+    "required_actions": [
+      "Review the project deployment checklist",
+      "Confirm release readiness",
+      "Send confirmation"
+    ],
+    "draft_type": "grouped_reply",
+    "generation_source": "Local",
+    "draft_hash": "08f2f296566098bb37066f2987ed45aba1c6a03028439031a8bfa01609e4bf43"
+  },
+  "dbfa004676b6": {
+    "message_id": "AQMkADAwATM3ZmYAZS0yOWM3LWI4NDUtMDACLTAwCgBGAAADFGxjp50S5ESyn4POswThzQcAAACv-qgOdQxLmBXMl-zWPZgAAAIBDAAAAa-_qA51DEuYFcyX-NY9mAAGW2z5tAAAAA==",
+    "subject": "URGENT: Project Review Required – Deadline Test",
+    "sender": "sefat ahmed akkhor <sefatahmed3674@gmail.com>",
+    "language": "English",
+    "body": "Hello sefat ahmed akkhor,\n\nThank you for your email. I will review the details and verify the relevant information before sharing my findings or confirmation.\n\nBest regards",
+    "generation_source": "Local",
+    "draft_hash": "c9975940aaa575e970195a11d0fa2567a849845e301b18228430f7fb08eaff2a"
+  },
+  "e2b8acdfa0af": {
+    "message_id": "AQMkADAwATM3ZmYAZS0yOWM3LWI4NDUtMDACLTAwCgBGAAADFGxjp50S5ESyn4POswThzQcAAACv-qgOdQxLmBXMl-zWPZgAAAIBDAAAAa-_qA51DEuYFcyX-NY9mAAGW2z5tAAAAA==",
+    "subject": "URGENT: Project Review Required – Deadline Test",
+    "sender": "sefat ahmed akkhor <sefatahmed3674@gmail.com>",
+    "language": "English",
+    "body": "Hello sefat ahmed akkhor,\n\nThank you for your email and for outlining the requested actions. I will review project deployment checklist, assess release readiness, and send you a consolidated confirmation once the review is complete.\n\nI have taken note of the stated deadline: November 17, 2026, 3:00 PM Bangladesh time.\n\nBest regards",
+    "required_actions": [
+      "Review project deployment checklist",
+      "Confirm release readiness",
+      "Send confirmation"
+    ],
+    "draft_type": "grouped_reply",
+    "generation_source": "Local fallback",
+    "draft_hash": "92313f0035f04281cba7da90e751fb7bd4cf1183ca9611c5bf826ac2f754211e"
+  },
+  "f52eb0ef1fe8": {
+    "message_id": "AQMkADAwATM3ZmYAZS0yOWM3LWI4NDUtMDACLTAwCgBGAAADFGxjp50S5ESyn4POswThzQcAAACv-qgOdQxLmBXMl-zWPZgAAAIBDAAAAa-_qA51DEuYFcyX-NY9mAAGW2z5tAAAAA==",
+    "subject": "URGENT: Project Review Required – Deadline Test",
+    "sender": "sefat ahmed akkhor <sefatahmed3674@gmail.com>",
+    "language": "English",
+    "body": "Hello sefat ahmed akkhor,\n\nThank you for your email and for outlining the requested actions. I will review project deployment checklist, assess release readiness, and send you a consolidated confirmation once the review is complete.\n\nI have taken note of the stated deadline: November 17, 2026, 3:00 PM Bangladesh time.\n\nBest regards",
+    "required_actions": [
+      "Review project deployment checklist",
+      "Confirm release readiness",
+      "Send confirmation"
+    ],
+    "draft_type": "grouped_reply",
+    "generation_source": "Local",
+    "draft_hash": "92313f0035f04281cba7da90e751fb7bd4cf1183ca9611c5bf826ac2f754211e"
+  },
+  "1bd6e964d62f": {
+    "message_id": "AQMkADAwATM3ZmYAZS0yOWM3LWI4NDUtMDACLTAwCgBGAAADFGxjp50S5ESyn4POswThzQcAAACv-qgOdQxLmBXMl-zWPZgAAAIBDAAAAa-_qA51DEuYFcyX-NY9mAAGW2z5tAAAAA==",
+    "subject": "URGENT: Project Review Required – Deadline Test",
+    "sender": "sefat ahmed akkhor <sefatahmed3674@gmail.com>",
+    "language": "English",
+    "body": "Hello sefat ahmed akkhor,\n\nThank you for your email and for outlining the requested actions. I will review the project deployment checklist, assess release readiness, and send you a consolidated confirmation once the review is complete.\n\nI have taken note of the stated deadline: November 17, 2026, 3:00 PM Bangladesh time.\n\nBest regards",
+    "required_actions": [
+      "Review project deployment checklist",
+      "Confirm release readiness",
+      "Send confirmation"
+    ],
+    "draft_type": "grouped_reply",
+    "generation_source": "Local",
+    "draft_hash": "44dd41553003502d21b4f18747b20c6dcfb753bd2b589cd6d0b7fada59deaf3e"
+  },
+  "9a240b9de968": {
+    "message_id": "AQMkADAwATM3ZmYAZS0yOWM3LWI4NDUtMDACLTAwCgBGAAADFGxjp50S5ESyn4POswThzQcAAACv-qgOdQxLmBXMl-zWPZgAAAIBDAAAAa-_qA51DEuYFcyX-NY9mAAGW2z5tAAAAA==",
+    "subject": "URGENT: Project Review Required – Deadline Test",
+    "sender": "sefat ahmed akkhor <sefatahmed3674@gmail.com>",
+    "language": "English",
+    "body": "Hello sefat ahmed akkhor,\n\nThank you for your email.\n\nBest regards",
+    "generation_source": "Local",
+    "created_at": 1795434566.456154,
+    "draft_hash": "3dfd1246060f12ca8b964c59d25c9965200b5b2f8565b7ef349ac67ab28a205a"
+  }
+}

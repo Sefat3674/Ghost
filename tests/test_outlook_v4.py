@@ -136,6 +136,43 @@ class EmailServiceTests(unittest.TestCase):
         EmailService(graph).search_emails('say "hi" now')
         self.assertEqual(graph.get_all.call_args.kwargs["params"]["$search"], '"say  hi  now"')
 
+    def test_send_email_builds_text_payload_with_all_recipients(self):
+        graph = mock.Mock()
+        EmailService(graph).send_email(
+            ["to@example.com"], "Test subject", "Plain text body",
+            cc=["cc@example.com"], bcc=["bcc@example.com"],
+            importance="high",
+        )
+
+        graph.post.assert_called_once_with("me/sendMail", {
+            "message": {
+                "subject": "Test subject",
+                "body": {"contentType": "Text", "content": "Plain text body"},
+                "toRecipients": [{"emailAddress": {"address": "to@example.com"}}],
+                "ccRecipients": [{"emailAddress": {"address": "cc@example.com"}}],
+                "bccRecipients": [{"emailAddress": {"address": "bcc@example.com"}}],
+                "importance": "high",
+            },
+            "saveToSentItems": True,
+        })
+
+    def test_send_email_builds_html_payload(self):
+        graph = mock.Mock()
+        EmailService(graph).send_email(
+            "to@example.com", "HTML subject", "<p>Hello</p>", html=True
+        )
+
+        payload = graph.post.call_args.args[1]
+        self.assertEqual(payload["message"]["body"], {
+            "contentType": "HTML", "content": "<p>Hello</p>"
+        })
+
+    def test_send_email_without_recipient_does_not_post(self):
+        graph = mock.Mock()
+        with self.assertRaises(ValueError):
+            EmailService(graph).send_email([], "Subject", "Body")
+
+        graph.post.assert_not_called()
     def test_bulk_move_reports_partial_failure(self):
         graph = mock.Mock()
         graph.batch.return_value = [
@@ -180,6 +217,79 @@ class DispatcherTests(unittest.TestCase):
         self.assertIn("Email sent", out)
         emails.send_email.assert_called_once()
 
+    def test_send_email_rejects_non_string_subject(self):
+        for subject in ({"unexpected": "value"}, ["unexpected"]):
+            with self.subTest(subject=subject):
+                emails = mock.Mock()
+                out, _ = _run(
+                    {
+                        "action": "send_email",
+                        "to": "a@b.com",
+                        "subject": subject,
+                        "body": "Mock-only test",
+                        "_ghost_safety_approved": OUTLOOK_APPROVAL_CAPABILITY,
+                    },
+                    emails=emails,
+                )
+                self.assertIn("subject", out.lower())
+                emails.send_email.assert_not_called()
+
+    def test_send_email_rejects_non_string_body(self):
+        for body in ({"unexpected": "value"}, ["unexpected"]):
+            with self.subTest(body=body):
+                emails = mock.Mock()
+                out, _ = _run(
+                    {
+                        "action": "send_email",
+                        "to": "a@b.com",
+                        "subject": "Mock-only test",
+                        "body": body,
+                        "_ghost_safety_approved": OUTLOOK_APPROVAL_CAPABILITY,
+                    },
+                    emails=emails,
+                )
+                self.assertIn("body", out.lower())
+                emails.send_email.assert_not_called()
+
+    def test_send_email_rejects_string_html_flag(self):
+        emails = mock.Mock()
+
+        out, _ = _run(
+            {
+                "action": "send_email",
+                "to": "a@b.com",
+                "subject": "Mock-only HTML validation",
+                "body": "This must not be sent",
+                "html": "false",
+                "_ghost_safety_approved": OUTLOOK_APPROVAL_CAPABILITY,
+            },
+            emails=emails,
+        )
+
+        self.assertIn("html", out.lower())
+        emails.send_email.assert_not_called()
+
+    def test_send_email_accepts_boolean_html_values(self):
+        for html_value in (False, True):
+            with self.subTest(html=html_value):
+                emails = mock.Mock()
+
+                out, _ = _run(
+                    {
+                        "action": "send_email",
+                        "to": "a@b.com",
+                        "subject": "Mock-only Boolean test",
+                        "body": "Test body",
+                        "html": html_value,
+                        "_ghost_safety_approved": OUTLOOK_APPROVAL_CAPABILITY,
+                    },
+                    emails=emails,
+                )
+
+                self.assertIn("Email sent", out)
+                emails.send_email.assert_called_once()
+                self.assertIs(emails.send_email.call_args.args[5], html_value)
+
     def test_send_email_rejects_invalid_importance(self):
         emails = mock.Mock()
 
@@ -217,12 +327,53 @@ class DispatcherTests(unittest.TestCase):
         self.assertNotIn("email sent", out.lower())
         emails.send_email.assert_called_once()
 
+    def test_send_email_graph_timeout_warns_check_sent_items(self):
+        emails = mock.Mock()
+        emails.send_email.side_effect = GraphAPIError(
+            "Microsoft Graph request timed out."
+        )
+
+        out, _ = _run(
+            {
+                "action": "send_email",
+                "to": "a@b.com",
+                "subject": "Diagnostic test",
+                "body": "Mock-only test",
+                "_ghost_safety_approved": OUTLOOK_APPROVAL_CAPABILITY,
+            },
+            emails=emails,
+        )
+
+        self.assertIn("couldn't complete", out.lower())
+        self.assertIn("sent items", out.lower())
+        self.assertIn("retry", out.lower())
+        self.assertNotIn("email sent", out.lower())
+        emails.send_email.assert_called_once()
     def test_invalid_recipient_rejected(self):
         out, emails = _run({"action": "send_email", "to": "not-an-email",
                             "_ghost_safety_approved": OUTLOOK_APPROVAL_CAPABILITY})
         self.assertIn("Invalid recipient", out)
         emails.send_email.assert_not_called()
 
+    def test_invalid_cc_rejected(self):
+        out, emails = _run({
+            "action": "send_email",
+            "to": "a@b.com",
+            "cc": "bad-address",
+            "_ghost_safety_approved": OUTLOOK_APPROVAL_CAPABILITY,
+        })
+        self.assertIn("Invalid Cc address", out)
+        emails.send_email.assert_not_called()
+
+    def test_invalid_bcc_rejected(self):
+        out, emails = _run({
+            "action": "send_email",
+            "to": "a@b.com",
+            "bcc": "bad-address",
+            "_ghost_safety_approved": OUTLOOK_APPROVAL_CAPABILITY,
+        })
+        self.assertIn("Invalid Bcc address", out)
+        emails.send_email.assert_not_called()
     def test_delete_requires_approval_and_is_recoverable(self):
         out, emails = _run({"action": "delete_email", "message_id": "AAMk123="})
         self.assertIn("requires explicit", out)
@@ -334,7 +485,7 @@ class DraftWorkflowTests(unittest.TestCase):
     def test_bangla_local_reply_is_real_bangla(self):
         text = ol._generate_local_reply(self.email, "Bangla")
         self.assertNotIn("?", text)
-        self.assertIn("ধন্যবাদ", text)
+        self.assertIn("\u09a7\u09a8\u09cd\u09af\u09ac\u09be\u09a6\u09be\u09a8\u09cd\u09a4\u09c7", text)
 
 
 if __name__ == "__main__":

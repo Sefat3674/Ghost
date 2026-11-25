@@ -1,0 +1,68 @@
+GHOST OUTLOOK MODULE v4  (legacy Work/School "outlook" tool, Microsoft Graph)
+===========================================================================
+
+INSTALL (from your Ghost project root, e.g. E:\kaizumi\kaizumi)
+1. Stop Ghost. Back up:   outlook\  and  actions\outlook.py
+2. Copy these into the project root, allowing overwrite:
+     outlook\            (config, auth\, services\ - includes new mailbox_service.py)
+     actions\outlook.py
+     tests\test_outlook_v4.py
+     apply_outlook_v4.py
+3. Wire up main.py + safety.py (makes backups *.before_outlook_v4.bak):
+     python apply_outlook_v4.py
+4. Check:
+     python -m py_compile main.py safety.py actions\outlook.py
+     python -m unittest tests.test_outlook_v4
+5. Start Ghost, then say/run Outlook action "login" ONCE.
+   A new permission (MailboxSettings.ReadWrite) was added, so Microsoft will ask
+   you to consent again. Redundant Mail.Read was removed (Mail.ReadWrite covers it).
+
+   If you do not want the new permission, delete "MailboxSettings.ReadWrite" from
+   SCOPES in outlook\config.py (auto-reply/categories actions will then return 403).
+
+ROLLBACK: restore the backed-up outlook\ and actions\outlook.py, and
+main.py.before_outlook_v4.bak / safety.py.before_outlook_v4.bak.
+
+NOTE: this is the legacy "outlook" tool. Your "personal_outlook" MCP tool
+(integrations\personal_outlook_*.py) is untouched.
+
+BUGS FIXED IN THE OLD MODULE
+- Bangla text was corrupted to "????" in local replies and the inbox report.
+  Rewritten in real Bangla.
+- Inbox intelligence report printed literal "\n" characters.
+- Stray bulk-move code inside _analyze_inbox_with_gemini referenced undefined
+  variables (NameError whenever an action-item sentence was detected). Removed.
+- Reply draft header showed mojibake ("Ã¢â‚¬â€").
+- Attachment download saved everything as "attachment" (filename was read from a
+  header that Graph does not send). Now reads the real name, sanitises it and
+  never overwrites an existing file.
+- Pending drafts said "expired" but never expired. Now 24 h TTL.
+- Bulk move was one slow request per email; now Graph $batch (20 per call).
+- delete_email used to hard-delete; now moves to Deleted Items (permanent_delete
+  is a separate, confirmed action).
+- Message/folder IDs were put straight into URLs; now validated.
+- No retry on throttling (429) or 5xx, no token refresh on 401, no paging.
+- MicrosoftAuth was rebuilt on every call; now a shared, thread-safe instance.
+- Token cache crashed on non-Windows; now falls back to a file cache.
+- Docstring claimed "read-only" while the module sends and moves mail.
+
+NEW ACTIONS (all existing actions keep their names and behaviour)
+Mail:     filter, thread, create_draft, update_draft, list_drafts, send_draft,
+          delete_draft, send_email, reply (reply_all), forward, mark_read,
+          mark_unread, flag, unflag, complete_flag, set_importance,
+          set_categories, archive, delete_email, permanent_delete
+          read/unread/search/read_folder accept folder names, sub-folders and
+          well-known names (inbox, sent, drafts, deleted, junk, archive)
+Calendar: event, create_event (attendees, Teams, reminder, all-day),
+          update_event, delete_event, respond_event, free_slots,
+          calendar (days / start / end / timezone)
+Contacts: create_contact, update_contact, delete_contact
+Files:    download_attachment, attach_file (large files via upload session)
+Mailbox:  categories, create_category, auto_reply, set_auto_reply
+Account:  login, logout, status
+
+SAFETY MODEL
+Sending, deleting, moving, inviting, changing settings and attaching local files
+all require _ghost_safety_approved (set by main.py only after the user confirms).
+apply_outlook_v4.py registers the new actions as HIGH risk in safety.py.
+AI replies still use the draft -> show -> hash-checked send_reply flow.

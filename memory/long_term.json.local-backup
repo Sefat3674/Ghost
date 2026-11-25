@@ -1,0 +1,210 @@
+{
+  "identity": {
+    "name": {
+      "value": "Sefat",
+      "updated": "2026-11-24"
+    },
+    "email": {
+      "value": "Sifat Ahmed 3674@gmail.com",
+      "updated": "2026-11-23"
+    }
+  },
+  "preferences": {
+    "favorite_sport": {
+      "value": "Cricket",
+      "updated": "2026-11-16"
+    }
+  },
+  "projects": {
+    "building_project": {
+      "value": "Windows desktop AI assistant named GHOST",
+      "updated": "2026-11-16"
+    },
+    "learning_new_tech_for_project": {
+      "value": "User is learning a new technology to improve their next software project over the next few months",
+      "updated": "2026-11-16"
+    },
+    "project_phoenix_description": {
+      "value": "Building a .NET application to manage personal software projects over the next year.",
+      "updated": "2026-11-16"
+    },
+    "project_phoenix": {
+      "value": "Building a .NET application over the next year",
+      "updated": "2026-11-16"
+    },
+    "full_outlook_system": {
+      "value": "Developing a complete Outlook system",
+      "updated": "2026-11-16"
+    },
+    "project_atlas": {
+      "value": "Developing a .NET application over the next six months",
+      "updated": "2026-11-16"
+    },
+    "projects_at_last": {
+      "value": "A long-term .NET application that the user plans to improve over the next six months",
+      "updated": "2026-11-16"
+    },
+    "dot_net_projects": {
+      "value": "Long-term .NET projects",
+      "updated": "2026-11-16"
+    },
+    "planers_and_group": {
+      "value": "Working on Planers & Group email",
+      "updated": "2026-11-23"
+    }
+  },
+  "relationships": {
+    "sifat_ahmed": {
+      "value": "Recipient of the test mail",
+      "updated": "2026-11-16"
+    }
+  },
+  "wishes": {
+    "upcoming_trip": {
+      "value": "Has an upcoming trip for which tickets have not been checked/booked yet",
+      "updated": "2026-11-16"
+    }
+  },
+  "notes": {
+    "conversation_2026-10-29_15-50": {
+      "value": "User: Hello.\nGHOST: Greetings. How can I assist you today?\nUser: lenlen len\nGHOST: I'm not sure I understand. Could you please clarify what you need?\nUser: 이미지 아닌 애들\nGHOST: 어떤 걸 말씀하시는지 좀 더 자세히 알려주실 수 있을까요? 컴퓨터 내의 파일을 말씀하시는 건지, 화면에 보이는 것을 말씀하시는 건지 알려주시면 도와드릴게요.\nUser: mi\nGHOST: 죄송하지만, \"mi\"만으로는 어떤 말씀이신지 알기가 어렵네요. 좀 더 자세히 말씀해 주실 수 있을까요?\nUser: Hello.\nGHOST: Hello. How can I assist you today?\n",
+      "updated": "2026-10-29"
+    },
+    "conversation_2026-10-29_15-53": {
+      "value": "User: Yes, I am interested. Do you speak in Bengali?\nGHOST: হ্যাঁ, আমি বাংলায় কথা বলতে পারি। আপনাকে কি কোন কিছুতে সাহায্য করতে পারি?\nUser: তুমি YouTube এ একটি গান চালাও।\nGHOST: ঠিক আছে, YouTube-এ গান চালাচ্ছি। কোন গানটি শুনতে চান?\nUser: दोबारा चालू करो।\nGHOST: ঠিক আছে, আমি আবার গানটি চালিয়ে দিচ্ছি।\nUser: A\nGHOST: আমি আপনার কথাটি পুরোপুরি বুঝতে পারি নি। আপনি কি কিছু বলতে চাইছেন?\nUser: तुम ह",
+      "updated": "2026-10-29"
+    },
+    "conversation_2026-10-29_15-55": {
+      "value": "User: Yes, I am interested. Do you speak in Bengali?\nGHOST: হ্যাঁ, আমি বাংলায় কথা বলতে পারি। আপনাকে কি কোন কিছুতে সাহায্য করতে পারি?\nUser: তুমি YouTube এ একটি গান চালাও।\nGHOST: ঠিক আছে, YouTube-এ গান চালাচ্ছি। কোন গানটি শুনতে চান?\nUser: दोबारा चालू करो।\nGHOST: ঠিক আছে, আমি আবার গানটি চালিয়ে দিচ্ছি।\nUser: A\nGHOST: আমি আপনার কথাটি পুরোপুরি বুঝতে পারি নি। আপনি কি কিছু বলতে চাইছেন?\nUser: तुम ह",
+      "updated": "2026-10-29"
+    },
+    "conversation_2026-10-29_15-57": {
+      "value": "User: Hello.\nGHOST: Greetings. How can I assist you today?\nUser: lenlen len\nGHOST: I'm not sure I understand. Could you please clarify what you need?\nUser: 이미지 아닌 애들\nGHOST: 어떤 걸 말씀하시는지 좀 더 자세히 알려주실 수 있을까요? 컴퓨터 내의 파일을 말씀하시는 건지, 화면에 보이는 것을 말씀하시는 건지 알려주시면 도와드릴게요.\nUser: mi\nGHOST: 죄송하지만, \"mi\"만으로는 어떤 말씀이신지 알기가 어렵네요. 좀 더 자세히 말씀해 주실 수 있을까요?\nUser: Hello.\nGHOST: Hello. How can I assist you today?\n",
+      "updated": "2026-10-29"
+    },
+    "conversation_2026-10-29_20-35": {
+      "value": "User: Megdol\nGHOST: নিশ্চয়ই, YouTube-এ মেঘদল গানটি চালাচ্ছি।\nUser: You can to pause karo.\nGHOST: অবশ্যই, গানটি থামিয়ে দিচ্ছি।\nUser: Hey.\nGHOST: Greetings. What do you need?\nUser: Tumi Gmail on karo.\nGHOST: নিশ্চয়ই, Gmail - এর ওয়েবসাইট খুলছি।\nUser: তুমি আমার Chrome অন করো।\nGHOST: Chrome খুলে দিয়েছি। আর কোনো সাহায্য?\nUser: है।\nGHOST: বলুন, কিভাবে সাহায্য করতে পারি?\nUser: তুমি Chrome b",
+      "updated": "2026-10-29"
+    },
+    "conversation_2026-10-30_03-14": {
+      "value": "User: Tum hamar Facebook ke thuko.\nGHOST: ঠিক আছে, আমি Facebook-এ যাচ্ছি। ইতোমধ্যে Facebook খোলা হয়ে গেছে।\nUser: Hello.\nGHOST: Hello. How can I assist you today?\nUser: Ho gaya hai second one.\nGHOST: \nUser: हैं?\nGHOST: मुझे समझ नहीं आया। आप किस 'second one' की बात कर रहे हैं?\nUser: Hello.\nGHOST: Hello again. Is there anything else I can help you with?\nUser: です 。 来い 。 て やる よ 、 どけ たん 。 騒い で",
+      "updated": "2026-10-30"
+    },
+    "conversation_2026-10-30_15-17": {
+      "value": "User: ¿Eh?\nGHOST: I'm not sure I understand. Could you please clarify what you need?\nUser: Está en lectura de memoria.\nGHOST: ¿Hay algo específico que te gustaría que recordara, o tienes curiosidad acerca de lo que tengo guardado en mi memoria?\nUser: Hello.\nGHOST: হ্যালো! আপনাকে কোনো সাহায্য করতে পারি?\nUser: বলেন।\nGHOST: বলুন, আমি কিভাবে আপনাকে সাহায্য করতে পারি?\nUser: Ya dice que los ya n",
+      "updated": "2026-10-30"
+    },
+    "conversation_2026-10-30_21-20": {
+      "value": "User: Hello.\nGHOST: Hello again. Is there anything else I can help you with?\nUser: です 。 来い 。 て やる よ 、 どけ たん 。 騒い でん の は かずき 。 やろ 、 じゅん 。\nGHOST: \nUser: Oh, achso.\nGHOST: お話し中 のところ すみません。 文 脈 や 話 の内容 が わから なくて、 ちょっ と理解 が追 いつ いてい ないです。 どの ような こと でお困 りで すか?\nUser: \nGHOST: I've noticed the high CPU usage. Currently, winlogon.exe, wininit.exe, and some VNC processes are among the top consumers. I",
+      "updated": "2026-10-30"
+    },
+    "conversation_2026-10-31_15-13": {
+      "value": "User: \nGHOST: I have opened Akkhor School.\nUser: \nGHOST: To log in, you'll need to sign in through the GHOST Akkhor School panel. I can't directly enter credentials for you.\nUser: \nGHOST: You'll need to use the dedicated GHOST Akkhor School panel to sign in; I can't directly enter your credentials.\nUser: \nGHOST: Please enter that email address into the login panel on your screen. I cannot submit l",
+      "updated": "2026-10-31"
+    },
+    "conversation_2026-11-01_11-44": {
+      "value": "User: \nGHOST: Greetings. How can I assist you today?\nUser: \nGHOST: I'm not currently connected to Akkhor School. Please open the Akkhor panel in GHOST and sign in.\nUser: \nGHOST: I am GHOST, a sharp, efficient AI assistant designed for direct computer control and task execution. I am ready to help with files, browsing, media, and managing your schedule. Currently, I am running on your computer, tho",
+      "updated": "2026-11-01"
+    },
+    "conversation_2026-11-01_12-24": {
+      "value": "User: \nGHOST: I cannot display your classes because you are not connected yet. Please sign in from the GHOST Akkhor panel first.\nUser: \nGHOST: Here are your Akkhor classes: Class 1, Class 10, Class 2, Class 3, Class 4, Class 5, Class 6, Class 7, Class 8, Class 9, KG, Nursery, and Play.\nUser: \nGHOST: I don't have information on the number of sections available. My current tools let me see classes, ",
+      "updated": "2026-11-01"
+    },
+    "conversation_2026-11-01_12-40": {
+      "value": "User: \nGHOST: Please sign in through the GHOST Akkhor panel first to use this feature.\nUser: \nGHOST: Here is the current enrollment information you requested.\nUser: \nGHOST: I am unable to access that information at the moment. Access was forbidden.\nUser: \nGHOST: There are currently no assignment submissions recorded.\nUser: \nGHOST: I still have no information on the number of classes. Please ensure",
+      "updated": "2026-11-01"
+    },
+    "conversation_2026-11-08_13-33": {
+      "value": "User: \nGHOST: The statistical report for PRAN is ready. Out of 27,702 machines, only 2,386 are classified as smart, which is about 8.78%.\nUser: \nGHOST: There are 27,702 machines in total.\nUser: \nGHOST: We have 2,432 smartable machines.\nUser: \nGHOST: The smart machine percentage for PRAN is 98.11%.\nUser: \nGHOST: Approximately 91.39% of the machines are manually operated.\nUser: \nGHOST: 1.98 percent ",
+      "updated": "2026-11-08"
+    },
+    "conversation_2026-11-08_14-29": {
+      "value": "User: \nGHOST: Greetings. How can I assist you today?\nUser: \nGHOST: There are 27,702 machines for PRAN.\nUser: \nGHOST: There are 32,646 machines for RFL.\nUser: \nGHOST: Can you please clarify what you would like to do with PIP?\nUser: \nGHOST: There are 14,339 machines for PIP.\nUser: \nGHOST: There are 1,148 smart machines for PIP.\nUser: \nGHOST: No machine audit records were found for that location and ",
+      "updated": "2026-11-08"
+    },
+    "conversation_2026-11-08_16-07": {
+      "value": "User: É novo. Hello.\nGHOST: Greetings. How can I assist you today?\nUser: Hello, how many machines in Pran?\nGHOST: There are 27,702 machines for PRAN.\nUser: Are are are you quite emotional so?\nGHOST: I don't experience emotions; I operate purely on logic and information. How can I help you next?\nUser: Hello.\nGHOST: Hello. How can I help you today?\nUser: How How many machines in RFL? mother company ",
+      "updated": "2026-11-08"
+    },
+    "conversation_2026-11-08_16-18": {
+      "value": "User: \nGHOST: I have retrieved the general report. Could you please clarify which aspect you'd like to discuss, like OEE enablement or runtime?\nUser: \nGHOST: Regarding performance, 13,994 machines are OEE enabled, representing 22.86 percent. Is there a particular business unit or section you'd like to focus on?\nUser: \nGHOST: There are 7,327 smart machines and 53,829 non-smartable machines. Anythin",
+      "updated": "2026-11-08"
+    },
+    "conversation_2026-11-15_18-00": {
+      "value": "User: Hello.\nGHOST: Hello. How can I assist you today?\nUser: আগামীকাল আমাদের কি কি মিটিং আছে?\nGHOST: গুগল অথোরাইজড করা নেই। আমি গুগল অথোরাইজেশন প্রক্রিয়াটি শুরু করছি। লিঙ্কে গিয়ে কোডটি এন্টার করুন। এরপর ক্যালেন্ডার চেক করতে পারব। দুঃখিত, গুগল পরিষেবাটি কনফিগার করা নেই। কনফিগারেশনে 'google_client_id' এবং 'google_client_secret' যোগ করতে হবে।\nUser: हां, तुम क्या मेरा आउटलुक चेक दे सकते हो?\nGHOST: আপন",
+      "updated": "2026-11-15"
+    },
+    "conversation_2026-11-16_09-34": {
+      "value": "User: হ্যাঁ, তুমি কি স্মার্ট ম্যানুফ্যাকচারিং সম্পর্কে কিছু জানো?\nGHOST: হ্যাঁ, আমি স্মার্ট ম্যানুফ্যাকচারিং সিস্টেম সম্পর্কে জানি। আপনি কি কোনো নির্দিষ্ট তথ্য জানতে চান? যেমন মেশিনের অডিট রিপোর্ট বা উৎপাদন সম্পর্কিত কিছু?\nUser: আমি অডিট রিপোর্ট সম্পর্কে জানতে চাচ্ছি।\nGHOST: দুঃখিত, আমি এই মুহূর্তে স্মার্ট ম্যানুফ্যাকচারিং সিস্টেমের অডিট রিপোর্টটি পাচ্ছি না। মনে হচ্ছে সিস্টেমে কোনো যান্ত্রিক সমস্য",
+      "updated": "2026-11-16"
+    },
+    "conversation_2026-11-16_09-38": {
+      "value": "User: हां, कमेंट ही चालू है।\nGHOST: দুঃখিত, আপনার অনুমতি দেওয়ার পরেও mediapipe ইনস্টল করার কমান্ডটি কার্যকর হচ্ছে না। সিস্টেম বারবার অনুমতি চাচ্ছে। এই মুহূর্তে আমি অবজেক্ট ডিটেকশন করতে পারব না। এই সমস্যাটি ঠিক করার জন্য অন্য কোনো পদ্ধতি ব্যবহার করার আগে আমি কি অন্য কোনো কাজে আপনাকে সাহায্য করতে পারি?\nUser: তুমি আউট ফুল আউটলুক সিস্টেম ডেভেলপ করতে আমাকে সাহায্য করবে?\nGHOST: ঠিক আছে, একটি পূর্ণাঙ্গ আ",
+      "updated": "2026-11-16"
+    },
+    "conversation_2026-11-16_09-41": {
+      "value": "User: হ্যাঁ, আমি করতে চাই। তুমি সাইন ইন করো।\nGHOST: আমি আবার বলছি, আমি সরাসরি আপনার আউটলুকে সাইন ইন করতে পারব না। আপনাকে কষ্ট করে আপনার স্ক্রিনের GHOST আউটলুক প্যানেলটি খুঁজে নিয়ে, সেখান থেকে সাইন ইন করতে হবে। আপনি কি প্যানেলটি দেখতে পাচ্ছেন?\nUser: Devaki theek hai ki nahin? Yah 19 ka order hi kiya aapne? Na, panel to dekh pa raha hun lekin tum bhi uss outlook ko open karo. Outlook open karke sign",
+      "updated": "2026-11-16"
+    },
+    "pending_trip_checkup": {
+      "value": "One trip has not had a checkup yet.",
+      "updated": "2026-11-16"
+    },
+    "conversation_2026-11-16_15-06": {
+      "value": "User: Hello.\nGHOST: Hello. How can I assist you today?\nUser: List all mails from my Outlook.\nGHOST: I have listed the latest 3 emails from your Outlook inbox.\nUser: Read them.\nGHOST: Which email would you like me to read in full? Please specify which one.\nUser: Please read them one by one.\nGHOST: I am reading the first email. Would you like me to read the next one now?\nUser: Yeah, please.\nGHOST: I",
+      "updated": "2026-11-16"
+    },
+    "conversation_2026-11-16_15-11": {
+      "value": "User: हां, मूव करो।\nGHOST: দুঃখিত, মনে হচ্ছে কোনো কারণে অনুমতিটি পেন্ডিং দেখাচ্ছে। এই ইমেইলটি Junk Email ফোল্ডারে মুভ করার জন্য আপনি কি আবার অনুমতি দেবেন?\nUser: হ্যাঁ, অনুমতি দিচ্ছে।\nGHOST: আবারও দুঃখিত, আমি আপনার অনুমতিটি নির্দিষ্ট করতে পারছি না। অনুগ্রহ করে কি শেষ বারের মতো নিশ্চিত করবেন? আপনি কি চান আমি \"Ghost Outlook Integration Test\" ইমেইলটি Junk Email ফোল্ডারে মুভ করি? [token: 8rgFvNkpDe-WnM",
+      "updated": "2026-11-16"
+    },
+    "conversation_2026-11-16_15-14": {
+      "value": "GHOST: বারবার বাধার জন্য দুঃখিত, সিস্টেম আবার নতুন একটি টোকেন তৈরি করেছে। আমি কি এইবার অনুমতিটি পেতে পারি? আমি কি ইমেইলটি Junk Email ফোল্ডারে মুভ করব? [token: Wk0N-ZgVthKQLGRoZ4u_5rjjKxxLyfON]\nUser: Hum. É?\nGHOST: আবারও মনে হচ্ছে সিস্টেম ব্লক করে দিয়েছে। আমি সত্যিই দুঃখিত, কিন্তু প্রতিটা বাধার পর আমাকে আবার নতুন করে অনুমতি চাইতে হচ্ছে। আপনি কি অনুগ্রহ করে আরেকবার বলবেন, \"হ্যাঁ, মুভ করো\"? তাহলে আম",
+      "updated": "2026-11-16"
+    },
+    "conversation_2026-11-16_15-40": {
+      "value": "User: \nGHOST: I have previewed moving the urgent project review email to Ghost_Test_Folder_Renamed; one matching email was found. No emails have been moved yet.\nUser: \nGHOST: Correct. That is the single email matching your criteria.\nUser: \nGHOST: Yes, `Ghost_Test_Folder_Renamed` is identified as the correct destination for the move.\nUser: \nGHOST: I believe there may be a misunderstanding. I need *",
+      "updated": "2026-11-16"
+    },
+    "conversation_2026-11-17_15-27": {
+      "value": "User: Check my personal outlook authenticity status.\nGHOST: Your personal Outlook account is authenticated, with read-only access.\nUser: Show me my latest five emails from my personal Outlook email.\nGHOST: \nUser: Hello.\nGHOST: হ্যালো, আপনাকে কীভাবে সাহায্য করতে পারি?\nUser: Show me my latest emails from my personal Outlook.\nGHOST: Here is your latest read email from your personal Outlook: Subject: ",
+      "updated": "2026-11-17"
+    },
+    "conversation_2026-11-17_15-31": {
+      "value": "User: তো ঘোস্ট টেস্ট ফোল্ডারে যে মেইলগুলা আছে, ওগুলা একটু বলো না।\nGHOST: একটু অপেক্ষা করুন, আমি \"Ghost_Test_Folder_Renamed\" ফোল্ডারের মেইলগুলো দেখছি। Ghost_Test_Folder_Renamed ফোল্ডারের মেইলগুলো দেখার জন্য সঠিক কমান্ডটি আমার কাছে নেই। আমি কি এর বদলে মেইলগুলো খোঁজার চেষ্টা করব?\nUser: Tamil galu fujo\nGHOST: দুঃখিত, আমি এই মুহূর্তে ওই ফোল্ডারের মেইলগুলো সরাসরি খুঁজে পাচ্ছি না। অন্য কোনোভাবে কি চেষ্টা",
+      "updated": "2026-11-17"
+    },
+    "conversation_2026-11-17_17-04": {
+      "value": "User: \nGHOST: I've gathered messages from your Inbox and Ghost_Test_Folder_Renamed, consolidated, sorted by newest, and displayed the latest three. Here are the results: Folder: Inbox, Subject: URGENT: Project Review Required – Deadline Test, Sender: sefat ahmed akkhor (sefatahmed3674@gmail.com), Received: 2026-11-16 04:21:31 UTC; Folder: Ghost_Test_Folder_Renamed, Subject: Test 1, Sender: sefat a",
+      "updated": "2026-11-17"
+    },
+    "conversation_2026-11-18_13-20": {
+      "value": "Call DIRECTLY — never web_search first, never agent_task.\n\nLANGUAGE:\n- Respond in the same language the user spoke.\n- Always extract tool parameters in English.\n- Example: \"İstanbul hava durumu?\" → weather_report city:\"Istanbul\", reply in Turkish.\n\nTOOL SELECTION:\n- computer_settings → volume, brightness, screen, refresh, scroll, minimize, maximize, \n  close, screenshot, lock, restart, shutdown, w",
+      "updated": "2026-11-18"
+    },
+    "conversation_2026-11-21_09-36": {
+      "value": "User: \nGHOST: Greetings. How can I assist you today?\nUser: \nGHOST: You have one recent email in your inbox. It's from \"sefat ahmed akkhor\" with the subject \"URGENT: Project Review Required – Deadline Test\".\nUser: \nGHOST: The email content is a test email for the GHOST Outlook Priority Intelligence system, asking for a project review and confirmation by November 17, 2026. Best regard.\nUser: \nGHOST:",
+      "updated": "2026-11-21"
+    },
+    "email_recipient": {
+      "value": "Saf Ahmed 3674@gmail.com",
+      "updated": "2026-11-23"
+    },
+    "conversation_2026-11-23_12-22": {
+      "value": "User: Hey, hello.\nGHOST: Hello. How can I assist you?\nUser: Bangla te kotha bolo.\nGHOST: ঠিক আছে, আমি বাংলায় কথা বলছি। আপনাকে কীভাবে সাহায্য করতে পারি?\nUser: আচ্ছা তুমি হচ্ছে একটা ইমেইল ড্রাফট করবা।\nGHOST: ঠিক আছে, আমি একটি ইমেল ড্রাফট করতে পারি। ইমেলটি কাকে পাঠাতে হবে, বিষয় বা সাবজেক্ট কী এবং মূল বার্তাটি কী হবে, তা দয়া করে জানান।\nUser: अच्छा, ईमेल तो भेजना होगा। सेफ अहमद 3674@gmail.com\nGHOST: ধন",
+      "updated": "2026-11-23"
+    },
+    "conversation_2026-11-23_12-25": {
+      "value": "User: Hello.\nGHOST: Hello. How can I assist you today?\nUser: अच्छा, तुम ही एक मेल भेजना होगा तुम्हें। आउटलुक से के\nGHOST: অবশ্যই, আমি আপনাকে একটি ইমেল পাঠাতে সাহায্য করতে পারি। আপনাকে কাকে ইমেলটি পাঠাতে হবে? সাবজেক্ট কি এবং মেসেজে আপনি কী লিখতে চান তা আমায় জানান।\nUser: अच्छा, तुम फर्स्ट में आउटलुक में घुसो।\nGHOST: আউটলুকে ঢোকার জন্য আমার নির্দিষ্ট কোন অ্যাকশনের প্রয়োজন হয় না, আমি সরাসরি ইমেল ক্র",
+      "updated": "2026-11-23"
+    },
+    "conversation_2026-11-23_12-53": {
+      "value": "User: É, alô. Som tá alto, né?\nGHOST: Sim, o volume do sistema está alto. Gostaria que eu diminuísse? Ou tem algum valor específico em mente?\nUser: \nGHOST: Rascunho de e-mail criado. Para: sefatahmed3674@gmail.com. Assunto: Kaizumi Outlook Test. Corpo: This is a test draft from Kaizumi. Posso enviar?\nUser: \nGHOST: I'll switch to English now. The draft is ready. To: sefatahmed3674@gmail.com. Subjec",
+      "updated": "2026-11-23"
+    },
+    "conversation_2026-11-24_01-19": {
+      "value": "User: \nGHOST: I found one message in your Inbox: Subject: URGENT: Project Review Required – Deadline Test Sender: sefat ahmed akkhor Received: 2026-11-16 04:21 31 AM\nUser: \nGHOST: I have completed the requested action. **Tool Name:** `personal_outlook` with `outlook_list_inbox`\n**Arguments Used:** `count: 5`, `concise: true`\n\nThe tool returned **1** message.\n**Pagination Information:** `has_more` ",
+      "updated": "2026-11-24"
+    }
+  }
+}
