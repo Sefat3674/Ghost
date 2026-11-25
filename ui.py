@@ -47,6 +47,28 @@ if sys.platform == "win32":
 # ── Themes ──────────────────────────────────────────────────────────────────
 # Each theme: UI colors + RGB tuples for the orb / halos.
 THEMES = {
+    "pran": {
+        "name": "PRAN-RFL",
+        "bg": "#0A0708", "pri": "#FF4D45", "mid": "#B8504A",
+        "dim": "#4A2E32", "dimmer": "#1B1213",
+        "acc": "#FFB020", "acc2": "#4ADE80", "blue": "#4DA3FF",
+        "text": "#FFEDEA", "panel": "#150F11",
+        "green": "#4ADE80", "red": "#FF4D45", "mutcol": "#8A8F98",
+        "hdr": "#100B0C", "input": "#1B1315", "inp_border": "#3A2629",
+        "halo": (255, 86, 72), "halo_mut": (138, 143, 152),
+        "orb": (140, 40, 34), "scan2": (255, 176, 32),
+    },
+    "robo": {
+        "name": "ROBO",
+        "bg": "#07090C", "pri": "#2EE6D0", "mid": "#1B8F86",
+        "dim": "#2B3A40", "dimmer": "#10171B",
+        "acc": "#F2C94C", "acc2": "#7ED957", "blue": "#3FA9F5",
+        "text": "#D6F5F0", "panel": "#0F1519",
+        "green": "#7ED957", "red": "#FF5C6C", "mutcol": "#FF5C6C",
+        "hdr": "#0A0E11", "input": "#121B20", "inp_border": "#2B3A40",
+        "halo": (46, 230, 208), "halo_mut": (255, 92, 108),
+        "orb": (20, 120, 110), "scan2": (242, 201, 76),
+    },
     "cyber": {
         "name": "CYBER",
         "bg": "#050B14", "pri": "#35D6E8", "mid": "#167D91",
@@ -98,12 +120,12 @@ def _load_theme_name() -> str:
     try:
         if THEME_FILE.exists():
             data = json.loads(THEME_FILE.read_text(encoding="utf-8"))
-            name = str(data.get("theme", "cyber")).strip()
+            name = str(data.get("theme", "pran")).strip()
             if name in THEMES:
                 return name
     except Exception:
         pass
-    return "cyber"
+    return "pran"
 
 
 def _save_theme_name(name: str) -> None:
@@ -115,29 +137,192 @@ def _save_theme_name(name: str) -> None:
         pass
 
 
+# ── Resolution independence ─────────────────────────────────────────────────
+# The whole UI is laid out and drawn in LOGICAL units. _S converts logical ->
+# real pixels (1.0 on 1080p, 2.0 on a 4K panel). Fonts follow through Tk's own
+# "scaling" so text, widgets and canvas art stay in proportion at any size.
+_S = 1.0
+
+
+def px(v):
+    """Logical units -> real pixels (accepts a number or a tuple of numbers)."""
+    if isinstance(v, (tuple, list)):
+        return tuple(px(x) for x in v)
+    return int(round(v * _S)) if v else 0
+
+
+def _pick_scale(sw, sh, dpi):
+    env = os.environ.get("GHOST_UI_SCALE")
+    if env:
+        try:
+            return max(0.75, min(float(env), 4.0))
+        except ValueError:
+            pass
+    s = max(min(sw / 1920.0, sh / 1080.0), dpi / 96.0, 1.0)
+    s = min(s, 3.0)
+    while s > 1.0 and sh / s < 720:          # keep a usable logical height
+        s -= 0.25
+    return round(s * 4) / 4.0
+
+
+class _HiDPICanvas(tk.Canvas):
+    """Canvas that is drawn in logical units: coordinates and line widths are
+    multiplied by the UI scale on the way in."""
+
+    def __init__(self, master, scale=1.0, **kw):
+        self._k = float(scale)
+        super().__init__(master, **kw)
+
+    def _scaled(self, args):
+        k, out = self._k, []
+        for v in args:
+            if isinstance(v, (int, float)):
+                out.append(v * k)
+            elif isinstance(v, (list, tuple)):
+                out.extend(x * k for x in v)
+            else:
+                out.append(v)
+        return out
+
+
+def _wrap_create(kind):
+    base = getattr(tk.Canvas, "create_" + kind)
+
+    def create(self, *args, **kw):
+        if self._k != 1.0:
+            args = self._scaled(args)
+            w = kw.get("width")
+            if isinstance(w, (int, float)) and w:
+                kw["width"] = (w * self._k if kind == "text"
+                               else max(1, int(round(w * self._k))))
+        return base(self, *args, **kw)
+    return create
+
+
+for _kind in ("line", "oval", "rectangle", "polygon", "arc", "text", "image"):
+    setattr(_HiDPICanvas, "create_" + _kind, _wrap_create(_kind))
+
+
+# ── Branding (config/brand.json overrides any of these) ─────────────────────
+BRAND_FILE = CONFIG_DIR / "brand.json"
+DEFAULT_BRAND = {
+    "company":   "PRAN-RFL GROUP",
+    "division":  "Smart Manufacturing & Factory Automation",
+    "product":   "GHOST",
+    "tagline":   "Industrial Intelligence Assistant",
+    "footer":    "PRAN-RFL Group  \u00b7  Smart Manufacturing & IBS ERP",
+    "logo":      "assets/pran_rfl_logo.png",
+    "logo_plate": True,
+    "panels":    ["AI CORE", "PLANT NETWORK", "FACTORY UNITS"],
+}
+
+
+def _load_brand() -> dict:
+    brand = dict(DEFAULT_BRAND)
+    try:
+        if BRAND_FILE.exists():
+            data = json.loads(BRAND_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                for k in brand:
+                    if k in data and data[k] not in (None, ""):
+                        brand[k] = data[k]
+    except Exception:
+        pass
+    if not (isinstance(brand["panels"], list) and len(brand["panels"]) >= 3):
+        brand["panels"] = list(DEFAULT_BRAND["panels"])
+    return brand
+
+
+class _DeckButton:
+    """Flat robotic button: accent strip, icon, label, hover / active glow."""
+
+    def __init__(self, ui, parent, text, icon, accent, on_click, mode=None):
+        col = ui.col
+        self.ui, self.mode, self.accent = ui, mode, accent
+        self.hover = False
+        self.active = False
+        self.border = tk.Frame(parent, bg=col["inp_border"], cursor="hand2")
+        self.border.pack(fill="x", padx=px(10), pady=px(3))
+        self.body = tk.Frame(self.border, bg=col["input"])
+        self.body.pack(fill="x", padx=px(1), pady=px(1))
+        self.strip = tk.Frame(self.body, bg=accent, width=px(3))
+        self.strip.pack(side="left", fill="y")
+        self.icon = tk.Label(self.body, text=icon, bg=col["input"], fg=accent,
+                             font=("Segoe UI Symbol", 10), width=2)
+        self.icon.pack(side="left", padx=px((8, 2)), pady=px(6))
+        self.label = tk.Label(self.body, text=text, anchor="w", bg=col["input"],
+                              fg=col["text"], font=("Segoe UI", 8, "bold"))
+        self.label.pack(side="left", fill="x", expand=True, pady=px(6))
+        self.arrow = tk.Label(self.body, text="\u203a", bg=col["input"], fg=col["dim"],
+                              font=("Segoe UI", 11, "bold"))
+        self.arrow.pack(side="right", padx=px((0, 10)))
+        for w in (self.border, self.body, self.strip, self.icon, self.label, self.arrow):
+            w.bind("<Enter>", self._enter)
+            w.bind("<Leave>", self._leave)
+            w.bind("<Button-1>", lambda e: on_click())
+        self.render()
+
+    def _enter(self, _e=None):
+        self.hover = True
+        self.render()
+
+    def _leave(self, _e=None):
+        self.hover = False
+        self.render()
+
+    def set_active(self, on):
+        if on != self.active:
+            self.active = on
+            self.render()
+
+    def render(self):
+        ui, col = self.ui, self.ui.col
+        hot = self.hover or self.active
+        bg = ui._mixc(col["input"], self.accent, 0.16) if hot else col["input"]
+        try:
+            self.body.configure(bg=bg)
+            for w in (self.icon, self.label, self.arrow):
+                w.configure(bg=bg)
+            self.border.configure(bg=self.accent if hot else col["inp_border"])
+            self.strip.configure(bg=self.accent if hot else ui._mixc(self.accent, col["input"], 0.6))
+            self.label.configure(fg=self.accent if hot else col["text"])
+            self.icon.configure(fg=self.accent)
+            self.arrow.configure(text="\u25cf" if self.active else "\u203a",
+                                 fg=self.accent if hot else col["dim"])
+        except tk.TclError:
+            pass
+
+
 class GHOSTUI:
     def __init__(self, face_path, size=None):
+        global _S
         self.root = tk.Tk()
-        self.root.title("GHOST  |  Personal AI Command Center")
+        self.brand = _load_brand()
+        self.root.title(f"{self.brand['product']}  |  {self.brand['company'].title()}  \u2014  {self.brand['division']}")
         self.root.resizable(True, True)
 
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
-        W  = min(sw - 40, 1180)
-        H  = min(sh - 80, 900)
-        self.root.geometry(f"{W}x{H}+{(sw-W)//2}+{(sh-H)//2}")
+        try:
+            dpi = self.root.winfo_fpixels("1i")
+        except Exception:
+            dpi = 96.0
+        S = _pick_scale(sw, sh, dpi)
+        self.S = S
+        _S = S
+        # Fonts are in points, so Tk "scaling" makes them follow the UI scale.
+        self.root.tk.call("tk", "scaling", 96.0 * S / 72.0)
+
+        # W / H are LOGICAL units (real pixels / S); everything lays out in them.
+        W  = int(min(sw / S - 40, 1500))
+        H  = int(min(sh / S - 80, 980))
+        self.root.geometry(f"{int(W * S)}x{int(H * S)}+{(sw - int(W * S)) // 2}+{(sh - int(H * S)) // 2}")
         self.root.configure(bg="#000000")
-        self.root.minsize(760, 600)
+        self.root.minsize(int(760 * S), int(600 * S))
+        self._fs = False
 
         self.W = W
         self.H = H
-
-        # DPI-scaled fonts: crisp on high-DPI laptop displays
-        try:
-            dpi = self.root.winfo_fpixels("1i")
-            self.root.tk.call("tk", "scaling", dpi / 72.0)
-        except Exception:
-            pass
 
         self.FACE_SZ = min(int(H * 0.40), 360)
         self.FCX     = W // 2
@@ -194,6 +379,14 @@ class GHOSTUI:
         self._arcade_image = None
         self._arcade = VisionArcade()
         self._deck_buttons = []
+        self._dock_rects = []
+        self._dock_hover = None
+        self._act = 0.3
+        self._stats = None
+        self._stats_ts = 0.0
+        self._disp = {"cpu": 0.0, "mem": 0.0}
+        self._tele = [0.3, 0.5, 0.4, 0.2]
+        self._tele_t = [0.3, 0.5, 0.4, 0.2]
 
         self._theme = _load_theme_name()
         self.col    = dict(THEMES[self._theme])
@@ -205,9 +398,14 @@ class GHOSTUI:
         self._load_face(face_path)
 
         # ── Canvas (background animation) ────────────────────────────────────
-        self.bg = tk.Canvas(self.root, width=W, height=H,
-                            bg=self.col["bg"], highlightthickness=0)
-        self.bg.place(x=0, y=0)
+        self._logo, self._logo_w = None, 0
+        self._load_logo()
+        self.bg = _HiDPICanvas(self.root, scale=S, width=int(W * S), height=int(H * S),
+                               bg=self.col["bg"], highlightthickness=0)
+        self._pl(self.bg, x=0, y=0)
+        self.bg.bind("<Motion>", self._on_stage_motion)
+        self.bg.bind("<Leave>", self._on_stage_leave)
+        self.bg.bind("<Button-1>", self._on_stage_click)
 
         # ── JARVIS command deck ────────────────────────────────────────────
         # This is intentionally built from native Tk widgets so it remains
@@ -218,41 +416,7 @@ class GHOSTUI:
         LW = max(320, W - 440) if W >= 900 else int(W * 0.72)
         LH = int(H * 0.11)
         LOG_Y = H - LH - int(H * 0.13)
-        self.log_frame = tk.Frame(
-            self.root, bg=self.col["panel"],
-            highlightbackground=self.col["inp_border"], highlightthickness=1
-        )
-        self.log_frame.place(x=(W - LW) // 2, y=LOG_Y, width=LW, height=LH)
-
-        self.log_heading = tk.Label(
-            self.log_frame, text="ACTIVITY  /  CONVERSATION",
-            bg=self.col["panel"], fg=self.col["mid"],
-            font=("Segoe UI", 8, "bold"), anchor="w"
-        )
-        self.log_heading.pack(fill="x", padx=12, pady=(7, 2))
-
-        log_body = tk.Frame(self.log_frame, bg=self.col["panel"])
-        log_body.pack(fill="both", expand=True, padx=(8, 4), pady=(0, 6))
-        self.log_text = tk.Text(
-            log_body, fg=self.col["text"], bg=self.col["panel"],
-            insertbackground=self.col["text"], borderwidth=0,
-            wrap="word", font=("Segoe UI", 9), padx=8, pady=4,
-            selectbackground=self.col["mid"], relief="flat",
-            spacing1=2, spacing3=2
-        )
-        self.log_scroll = tk.Scrollbar(
-            log_body, orient="vertical", command=self.log_text.yview,
-            bg=self.col["panel"], troughcolor=self.col["hdr"],
-            activebackground=self.col["mid"], relief="flat", borderwidth=0
-        )
-        self.log_text.configure(yscrollcommand=self.log_scroll.set)
-        self.log_scroll.pack(side="right", fill="y")
-        self.log_text.pack(side="left", fill="both", expand=True)
-        self.log_text.configure(state="disabled")
-        self.log_text.tag_config("you", foreground="#e8e8e8")
-        self.log_text.tag_config("ai",  foreground=self.col["pri"])
-        self.log_text.tag_config("sys", foreground=self.col["acc2"])
-        self.log_text.tag_config("err", foreground=self.col["red"])
+        self._build_chat_panel(LW, LH, LOG_Y)
 
         # ── Keyboard input ────────────────────────────────────────────────────
         # Keep the footer controls below the input even on compact windows.
@@ -264,6 +428,8 @@ class GHOSTUI:
 
         # ── Hotkeys ───────────────────────────────────────────────────────────
         self.root.bind("<F4>", lambda e: self._toggle_mute())
+        self.root.bind("<F11>", lambda e: self._toggle_fullscreen())
+        self.root.bind("<Escape>", lambda e: self._exit_fullscreen())
         self.root.bind("<F6>", lambda e: self._toggle_silent_mode())
         self.root.bind("<F5>", lambda e: self.cycle_theme())
 
@@ -289,111 +455,97 @@ class GHOSTUI:
         self._arcade.on_gesture(gesture, x)
 
     def _apply_deck_theme(self):
-        for deck in (getattr(self, "_left_deck", None), getattr(self, "_right_deck", None)):
-            if deck is not None:
-                deck.configure(bg=self.col["panel"])
-                for widget in deck.winfo_children():
-                    try:
-                        widget.configure(bg=self.col["panel"])
-                    except tk.TclError:
-                        pass
-        for shell in (getattr(self, "_left_deck_shell", None),
-                      getattr(self, "_right_deck_shell", None)):
+        """Decks are cheap to build, so a theme change simply rebuilds them."""
+        for name in ("_left_deck_shell", "_right_deck_shell"):
+            shell = getattr(self, name, None)
             if shell is not None:
-                shell.configure(bg=self.col["panel"],
-                                highlightbackground=self.col["inp_border"])
-                for widget in shell.winfo_children():
-                    try:
-                        if isinstance(widget, tk.Canvas):
-                            widget.configure(bg=self.col["panel"])
-                        else:
-                            widget.configure(bg=self.col["panel"],
-                                             troughcolor=self.col["hdr"],
-                                             activebackground=self.col["mid"])
-                    except tk.TclError:
-                        pass
-        for btn in getattr(self, "_deck_buttons", []):
-            btn.configure(bg=self.col["input"], fg=self.col["text"],
-                          activebackground=self.col["pri"], activeforeground=self.col["bg"],
-                          highlightbackground=self.col["inp_border"])
+                try:
+                    shell.destroy()
+                except tk.TclError:
+                    pass
+        self._build_command_deck()
+        self._relayout()
         self._refresh_deck_status()
 
     def _build_input_bar(self, lw: int, y: int):
+        col = self.col
         x0    = (self.W - lw) // 2
         BTN_W = 62
         CLR_W = 62
         INP_W = lw - BTN_W - CLR_W - 8
 
-        self._input_text = tk.Text(
-            self.root,
-            fg=self.col["text"], bg=self.col["input"],
-            insertbackground=self.col["text"],
-            borderwidth=0,
-            font=("Segoe UI", 10),
-            wrap="word",
-            height=2,
-            padx=8, pady=4,
-            highlightthickness=1,
-            highlightbackground=self.col["inp_border"],
-            highlightcolor=self.col["pri"],
+        self._input_shell = tk.Frame(
+            self.root, bg=col["input"], highlightthickness=px(1),
+            highlightbackground=col["inp_border"], highlightcolor=col["inp_border"]
         )
-        self._input_text.place(x=x0, y=y, width=INP_W, height=46)
+        self._pl(self._input_shell, x=x0, y=y, width=INP_W, height=46)
+        self._input_glyph = tk.Label(self._input_shell, text="\u276f", bg=col["input"],
+                                     fg=col["mid"], font=("Segoe UI Symbol", 13, "bold"))
+        self._input_glyph.pack(side="left", padx=px((12, 4)))
+        self._input_text = tk.Text(
+            self._input_shell, fg=col["text"], bg=col["input"],
+            insertbackground=col["pri"], borderwidth=0, highlightthickness=0,
+            font=("Segoe UI", 10), wrap="word", height=2, padx=px(4), pady=px(5),
+            relief="flat"
+        )
+        self._input_text.pack(side="left", fill="both", expand=True)
+        self._input_hint = tk.Label(
+            self._input_shell, text="Type a command or ask GHOST\u2026   (Enter \u00b7 send,  Shift+Enter \u00b7 new line)",
+            bg=col["input"], fg=self._mixc(col["mid"], col["input"], 0.35),
+            font=("Segoe UI", 9), cursor="xterm"
+        )
+        self._input_hint.bind("<Button-1>", lambda e: self._input_text.focus_set())
+        self._input_text.bind("<FocusIn>", lambda e: self._input_focus(True))
+        self._input_text.bind("<FocusOut>", lambda e: self._input_focus(False))
+        self._input_text.bind("<KeyRelease>", self._update_input_hint)
         self._input_text.bind("<Return>", self._on_input_submit)
         self._input_text.bind("<KP_Enter>", self._on_input_submit)
         self._input_text.bind("<Shift-Return>", self._on_newline)
         self._input_text.bind("<Shift-KP_Enter>", self._on_newline)
         self._input_text.bind("<Up>", self._on_hist_prev)
         self._input_text.bind("<Down>", self._on_hist_next)
+        self._update_input_hint()
 
         self._cmd_history = []
         self._hist_idx    = -1
         self._draft       = ""
 
         self._clear_btn = tk.Button(
-            self.root,
-            text="CLEAR",
-            command=self._on_clear_log,
-            fg=self.col["mid"], bg=self.col["panel"],
-            activeforeground=self.col["bg"], activebackground=self.col["acc2"],
-            font=("Segoe UI", 9, "bold"),
-            borderwidth=0, cursor="hand2",
-            highlightthickness=1,
-            highlightbackground=self.col["inp_border"],
+            self.root, text="CLEAR", command=self._on_clear_log,
+            fg=col["mid"], bg=col["panel"],
+            activeforeground=col["bg"], activebackground=col["acc2"],
+            font=("Segoe UI", 9, "bold"), borderwidth=0, cursor="hand2",
+            highlightthickness=px(1), highlightbackground=col["inp_border"],
         )
-        self._clear_btn.place(x=x0 + INP_W + 4, y=y, width=CLR_W, height=46)
+        self._pl(self._clear_btn, x=x0 + INP_W + 4, y=y, width=CLR_W, height=46)
 
         self._send_btn = tk.Button(
-            self.root,
-            text="SEND ▸",
-            command=self._on_input_submit,
-            fg=self.col["pri"], bg=self.col["panel"],
-            activeforeground=self.col["bg"], activebackground=self.col["pri"],
-            font=("Segoe UI", 9, "bold"),
-            borderwidth=0, cursor="hand2",
-            highlightthickness=1,
-            highlightbackground=self.col["inp_border"],
+            self.root, text="SEND \u25b8", command=self._on_input_submit,
+            fg=col["bg"], bg=col["pri"],
+            activeforeground=col["bg"], activebackground=col["acc2"],
+            font=("Segoe UI", 9, "bold"), borderwidth=0, cursor="hand2",
+            highlightthickness=px(1), highlightbackground=col["pri"],
         )
-        self._send_btn.place(x=x0 + INP_W + CLR_W + 8, y=y,
-                             width=BTN_W, height=46)
+        self._pl(self._send_btn, x=x0 + INP_W + CLR_W + 8, y=y, width=BTN_W, height=46)
 
     def _build_mute_button(self):
         BTN_W, BTN_H = 110, 32
         BTN_X = 18
         BTN_Y = self.H - 70
 
-        self._mute_canvas = tk.Canvas(
-            self.root, width=BTN_W, height=BTN_H,
+        self._mute_canvas = _HiDPICanvas(
+            self.root, scale=self.S, width=px(BTN_W), height=px(BTN_H),
             bg=self.col["bg"], highlightthickness=0, cursor="hand2"
         )
-        self._mute_canvas.place(x=BTN_X, y=BTN_Y)
+        self._pl(self._mute_canvas, x=BTN_X, y=BTN_Y)
         self._mute_canvas.bind("<Button-1>", lambda e: self._toggle_mute())
         self._draw_mute_button()
 
-        self._silent_canvas = tk.Canvas(
-            self.root, width=150, height=32,
+        self._silent_canvas = _HiDPICanvas(
+            self.root, scale=self.S, width=px(150), height=px(32),
             bg=self.col["bg"], highlightthickness=0, cursor="hand2"
         )
-        self._silent_canvas.place(x=136, y=BTN_Y)
+        self._pl(self._silent_canvas, x=136, y=BTN_Y)
         self._silent_canvas.bind("<Button-1>", lambda e: self._toggle_silent_mode())
         self._draw_silent_button()
 
@@ -433,17 +585,61 @@ class GHOSTUI:
     def _get_input(self) -> str:
         return self._input_text.get("1.0", "end-1c")
 
+    # ── Scaling / window helpers ─────────────────────────────────────────────
+
+    def _pl(self, widget, **kw):
+        """place() in logical units."""
+        for k in ("x", "y", "width", "height"):
+            v = kw.get(k)
+            if isinstance(v, (int, float)):
+                kw[k] = int(round(v * self.S))
+        widget.place(**kw)
+
+    def _toggle_fullscreen(self):
+        self._fs = not self._fs
+        try:
+            self.root.attributes("-fullscreen", self._fs)
+        except tk.TclError:
+            self._fs = False
+
+    def _exit_fullscreen(self):
+        if self._fs:
+            self._toggle_fullscreen()
+
+    def _load_logo(self):
+        self._logo, self._logo_w = None, 0
+        if Image is None or ImageTk is None:
+            return
+        try:
+            p = Path(str(self.brand.get("logo") or ""))
+            if not p.is_absolute():
+                p = BASE_DIR / p
+            if not p.is_file():
+                return
+            img = Image.open(p).convert("RGBA")
+            h = int(round(40 * self.S))
+            w = max(1, int(img.width * h / img.height))
+            max_w = int(190 * self.S)
+            if w > max_w:
+                w, h = max_w, max(1, int(img.height * max_w / img.width))
+            img = img.resize((w, h), Image.Resampling.LANCZOS)
+            self._logo = ImageTk.PhotoImage(img)
+            self._logo_w = w / self.S
+        except Exception:
+            self._logo, self._logo_w = None, 0
+
     def _on_clear_log(self):
         self._safe_ui(self._clear_log)
 
     def _on_configure(self, event=None):
         if event is None or event.widget is not self.root:
             return
-        if event.width == self.W and event.height == self.H:
+        W = max(1, int(round(event.width / self.S)))
+        H = max(1, int(round(event.height / self.S)))
+        if W == self.W and H == self.H:
             return
-        self.W = event.width
-        self.H = event.height
-        self.bg.configure(width=self.W, height=self.H)
+        self.W, self.H = W, H
+        self.bg.configure(width=int(W * self.S), height=int(H * self.S))
         self.FACE_SZ = min(int(self.H * 0.40), 360)
         self.FCX     = self.W // 2
         self.FCY     = int(self.H * 0.11) + self.FACE_SZ // 2
@@ -498,40 +694,49 @@ class GHOSTUI:
         return "break"
 
     def _refresh_deck_status(self):
-        if hasattr(self, "_vision_status"):
-            color = self.col["green"] if self.vision_mode != "STANDBY" else self.col["dim"]
-            self._vision_status.configure(text="● " + self.vision_mode, fg=color,
-                                          bg=self.col["panel"])
-        if hasattr(self, "_vision_signal_label"):
-            self._vision_signal_label.configure(text=self.vision_signal,
-                                                bg=self.col["panel"], fg=self.col["text"])
+        col = self.col
+        active = self.vision_mode != "STANDBY"
+        try:
+            if hasattr(self, "_vision_status"):
+                self._vision_status.configure(
+                    text="\u25cf " + self.vision_mode, bg=col["input"],
+                    fg=col["green"] if active else col["mid"])
+            if hasattr(self, "_vision_signal_label"):
+                self._vision_signal_label.configure(text=self.vision_signal,
+                                                    bg=col["input"], fg=col["text"])
+            for b in getattr(self, "_deck_buttons", []):
+                if b.mode:
+                    b.set_active(active and b.mode.upper() == self.vision_mode)
+        except tk.TclError:
+            pass
 
     def _relayout(self):
         W, H = self.W, self.H
         side_margin = 228 if W >= 980 else 18
         LW = max(360, W - (side_margin * 2)) if W >= 980 else int(W * 0.86)
         LW = min(LW, W - 36)
-        LH = max(92, min(126, int(H * 0.145)))
+        LH = max(110, min(170, int(H * 0.19)))
         LOG_Y = H - LH - 112
-        self.log_frame.place(x=(W - LW) // 2, y=LOG_Y, width=LW, height=LH)
+        self._stage_bottom = LOG_Y - 8
+        self._pl(self.log_frame, x=(W - LW) // 2, y=LOG_Y, width=LW, height=LH)
 
         INPUT_Y = LOG_Y + LH + 8
         x0 = (W - LW) // 2
         BTN_W, CLR_W = 88, 72
         INP_W = max(150, LW - BTN_W - CLR_W - 12)
-        self._input_text.place(x=x0, y=INPUT_Y, width=INP_W, height=48)
-        self._clear_btn.place(x=x0 + INP_W + 4, y=INPUT_Y, width=CLR_W, height=48)
-        self._send_btn.place(x=x0 + INP_W + CLR_W + 8, y=INPUT_Y,
+        self._pl(self._input_shell, x=x0, y=INPUT_Y, width=INP_W, height=48)
+        self._pl(self._clear_btn, x=x0 + INP_W + 4, y=INPUT_Y, width=CLR_W, height=48)
+        self._pl(self._send_btn, x=x0 + INP_W + CLR_W + 8, y=INPUT_Y,
                              width=BTN_W, height=48)
 
-        footer_y = min(H - 38, INPUT_Y + 54)
-        self._mute_canvas.place(x=18, y=footer_y)
+        footer_y = H - 35
+        self._pl(self._mute_canvas, x=18, y=footer_y)
         if getattr(self, "_silent_canvas", None) is not None:
-            self._silent_canvas.place(x=140, y=footer_y)
+            self._pl(self._silent_canvas, x=140, y=footer_y)
         if W >= 980:
             deck_h = max(300, H - 210)
-            self._left_deck_shell.place(x=16, y=96, width=194, height=deck_h)
-            self._right_deck_shell.place(x=W - 226, y=96, width=210, height=deck_h)
+            self._pl(self._left_deck_shell, x=16, y=96, width=194, height=deck_h)
+            self._pl(self._right_deck_shell, x=W - 226, y=96, width=210, height=deck_h)
         else:
             self._left_deck_shell.place_forget()
             self._right_deck_shell.place_forget()
@@ -614,6 +819,7 @@ class GHOSTUI:
         self._input_text.delete("1.0", tk.END)
         self._input_text.insert("1.0", text)
         self._input_text.mark_set(tk.INSERT, "end-1c")
+        self._update_input_hint()
 
     def _start_arcade_game(self, game):
         self._arcade.start(game)
@@ -643,14 +849,14 @@ class GHOSTUI:
         win = tk.Toplevel(self.root)
         win.title("GHOST Vision Arcade · Local CV")
         win.configure(bg=self.col["bg"])
-        win.geometry("1100x760")
-        win.minsize(900, 620)
+        win.geometry(f"{px(1100)}x{px(760)}")
+        win.minsize(px(900), px(620))
         try:
             win.state("zoomed")
         except tk.TclError:
             pass
         toolbar = tk.Frame(win, bg=self.col["panel"])
-        toolbar.pack(fill="x", padx=10, pady=10)
+        toolbar.pack(fill="x", padx=px(10), pady=px(10))
         for label, game in [("FACE FILTER", "face_filter"),
                             ("GESTURE PONG", "gesture_pong"),
                             ("ORB HUNT", "orb_hunt"),
@@ -664,10 +870,10 @@ class GHOSTUI:
             tk.Button(toolbar, text=label, command=lambda g=game: self._start_arcade_game(g),
                       bg=self.col["input"], fg=self.col["text"], activebackground=self.col["pri"],
                       activeforeground=self.col["bg"], relief="flat", font=("Consolas", 9, "bold"),
-                      cursor="hand2").pack(side="left", padx=3, ipady=7)
+                      cursor="hand2").pack(side="left", padx=px(3), ipady=px(7))
         label = tk.Label(win, text="Waiting for camera frames…", bg=self.col["bg"],
                          fg=self.col["text"], font=("Consolas", 11))
-        label.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+        label.pack(fill="both", expand=True, padx=px(12), pady=px((0, 12)))
         self._arcade_window, self._arcade_label = win, label
         self.arcade_open = True
         self._start_arcade_game("face_filter")
@@ -691,11 +897,11 @@ class GHOSTUI:
         win = tk.Toplevel(self.root)
         win.title("GHOST Vision Preview · Privacy Blur")
         win.configure(bg=self.col["bg"])
-        win.geometry("700x560")
+        win.geometry(f"{px(700)}x{px(560)}")
         win.resizable(True, True)
         label = tk.Label(win, text="Waiting for camera frames…", bg=self.col["bg"],
                          fg=self.col["text"], font=("Consolas", 11))
-        label.pack(fill="both", expand=True, padx=12, pady=12)
+        label.pack(fill="both", expand=True, padx=px(12), pady=px(12))
         self._preview_window = win
         self._preview_label = label
         self.vision_preview_open = True
@@ -733,6 +939,7 @@ class GHOSTUI:
         self.persona_mode  = mode or "normal"
         self.persona_mood  = mood or "calm"
         self.persona_voice = voice or "Aoede"
+        self._safe_ui(self._refresh_persona_card)
 
     def set_vision_detections(self, events):
         """Show a compact object summary from the active detector."""
@@ -774,82 +981,116 @@ class GHOSTUI:
     def _apply_theme_ui(self):
         self.root.configure(bg=self.col["bg"])
         self.bg.configure(bg=self.col["bg"])
-        self.log_frame.configure(bg=self.col["panel"],
-                                 highlightbackground=self.col["inp_border"])
-        self.log_heading.configure(bg=self.col["panel"], fg=self.col["mid"])
-        self.log_text.configure(fg=self.col["text"], bg=self.col["panel"])
-        self.log_scroll.configure(bg=self.col["panel"],
-                                  troughcolor=self.col["hdr"],
-                                  activebackground=self.col["mid"])
-        self.log_text.tag_config("ai", foreground=self.col["pri"])
-        self.log_text.tag_config("sys", foreground=self.col["acc2"])
-        self.log_text.tag_config("err", foreground=self.col["red"])
+        for cv in (getattr(self, "_mute_canvas", None), getattr(self, "_silent_canvas", None)):
+            if cv is not None:
+                cv.configure(bg=self.col["bg"])
+        self._style_chat()
         self._draw_mute_button()
+        self._draw_silent_button()
         self._refresh_input_style()
         self._apply_deck_theme()
 
     def _refresh_input_style(self):
+        col = self.col
         try:
-            self._input_text.configure(fg=self.col["text"],
-                                       bg=self.col["input"],
-                                       insertbackground=self.col["text"],
-                                       highlightbackground=self.col["inp_border"],
-                                       highlightcolor=self.col["pri"])
-            self._clear_btn.configure(fg=self.col["mid"],
-                                      highlightbackground=self.col["inp_border"])
-            self._send_btn.configure(fg=self.col["pri"],
-                                     highlightbackground=self.col["inp_border"])
+            self._input_shell.configure(bg=col["input"], highlightbackground=col["inp_border"],
+                                        highlightcolor=col["inp_border"])
+            self._input_glyph.configure(bg=col["input"], fg=col["mid"])
+            self._input_text.configure(fg=col["text"], bg=col["input"],
+                                       insertbackground=col["pri"])
+            self._input_hint.configure(bg=col["input"],
+                                       fg=self._mixc(col["mid"], col["input"], 0.35))
+            self._clear_btn.configure(fg=col["mid"], bg=col["panel"],
+                                      activebackground=col["acc2"],
+                                      highlightbackground=col["inp_border"])
+            self._send_btn.configure(fg=col["bg"], bg=col["pri"],
+                                     activebackground=col["acc2"],
+                                     highlightbackground=col["pri"])
         except Exception:
             pass
 
     def _build_command_deck(self):
         """Build the live control surface around the central GHOST core."""
-        self._left_deck_shell, self._left_deck, self._left_deck_canvas = self._create_scrollable_deck()
-        self._right_deck_shell, self._right_deck, self._right_deck_canvas = self._create_scrollable_deck()
-        self._deck_title(self._left_deck, "COMMAND DECK", self.col["pri"])
-        self._deck_title(self._right_deck, "VISION DECK", self.col["acc2"])
+        col = self.col
+        acc = self._accents()
+        self._deck_buttons = []
+        (self._left_deck_shell, self._left_deck,
+         self._left_deck_canvas) = self._create_scrollable_deck(
+            "COMMAND DECK", "SYSTEM CONTROL LINK", col["pri"])
+        (self._right_deck_shell, self._right_deck,
+         self._right_deck_canvas) = self._create_scrollable_deck(
+            "VISION DECK", "LOCAL CV \u00b7 CAMERA SUITE", col["acc2"])
+        Ld, Rd = self._left_deck, self._right_deck
 
-        self._deck_label(self._left_deck, "QUICK ACTIONS")
-        self._deck_button(self._left_deck, "VISION ARCADE", "__open_arcade__")
-        self._deck_button(self._left_deck, "AKKHOR SCHOOL", "__open_akkhor__")
-        for label, command in [
-            ("DAILY BRIEFING", "give me my daily briefing"),
-            ("SYSTEM STATUS", "show system status"),
-            ("READ SCREEN", "read my screen"),
-            ("FOCUS MODE", "start focus mode"),
+        self._deck_label(Ld, "QUICK ACTIONS", col["pri"])
+        self._deck_button(Ld, "VISION ARCADE", "__open_arcade__", icon="\u25c8", accent=acc[3])
+        self._deck_button(Ld, "AKKHOR SCHOOL", "__open_akkhor__", icon="\u25a3", accent=acc[1])
+        for label, command, icon in [
+            ("DAILY BRIEFING", "give me my daily briefing", "\u2630"),
+            ("SYSTEM STATUS", "show system status", "\u25c9"),
+            ("READ SCREEN", "read my screen", "\u25d0"),
+            ("FOCUS MODE", "start focus mode", "\u25ce"),
         ]:
-            self._deck_button(self._left_deck, label, command)
+            self._deck_button(Ld, label, command, icon=icon, accent=col["pri"])
+        self._deck_label(Ld, "PLANT INTELLIGENCE", col["acc"])
+        for label, command, icon in [
+            ("MACHINE UTILIZATION", "show machine utilization", "\u25a6"),
+            ("PRODUCTION REPORT", "show today's production report", "\u2630"),
+            ("ASSET STATUS", "show asset status", "\u25a3"),
+            ("SM DASHBOARD", "show smart manufacturing summary", "\u25c8"),
+        ]:
+            self._deck_button(Ld, label, command, icon=icon, accent=col["acc"])
+        self._deck_label(Ld, "AI PROFILE", acc[2])
+        self._persona_labels = self._deck_info_card(Ld, [
+            ("MODE", str(self.persona_mode).upper()),
+            ("MOOD", str(self.persona_mood).upper()),
+            ("VOICE", str(self.persona_voice)),
+        ])
 
-        self._deck_label(self._right_deck, "CAMERA CONTROL")
-        self._deck_button(self._right_deck, "OPEN CAMERA PREVIEW", "__open_preview__")
-        for label, mode in [("GESTURE CONTROL", "gesture"), ("OBJECT DETECTION", "objects"),
-                            ("AIR MOUSE", "air_mouse"),
-                            ("VOLUME HAND", "volume"), ("POSTURE", "posture"),
-                            ("MOTION WATCH", "motion")]:
-            self._deck_button(self._right_deck, label, f"start vision {mode}", mode)
-        self._deck_button(self._right_deck, "START RECORDING", "__record_start__")
-        self._deck_button(self._right_deck, "STOP RECORDING", "__record_stop__")
-        self._deck_button(self._right_deck, "STOP VISION", "stop vision", "STANDBY")
-        self._deck_label(self._right_deck, "ONE-SHOT SCANS")
-        for label, command in [("SNAPSHOT", "take a camera snapshot"),
-                                ("FACE COUNT", "count faces in front of the camera"),
-                                ("READ QR", "read a QR code with the camera"),
-                                ("READ TEXT", "read text with the camera"),
-                                ("REMOVE BACKGROUND", "remove the background from the camera subject"),
-                                ("DESCRIBE SCENE", "describe everything visible to the camera")]:
-            self._deck_button(self._right_deck, label, command)
-        self._vision_status = tk.Label(self._right_deck, text="● STANDBY", anchor="w",
-                                       bg=self.col["panel"], fg=self.col["green"],
+        self._deck_label(Rd, "CAMERA CONTROL", col["acc2"])
+        self._deck_button(Rd, "OPEN CAMERA PREVIEW", "__open_preview__",
+                          icon="\u25c9", accent=col["acc2"])
+        for label, mode, icon in [("GESTURE CONTROL", "gesture", "\u2726"),
+                                  ("OBJECT DETECTION", "objects", "\u25a3"),
+                                  ("AIR MOUSE", "air_mouse", "\u2316"),
+                                  ("VOLUME HAND", "volume", "\u266a"),
+                                  ("POSTURE", "posture", "\u25b2"),
+                                  ("MOTION WATCH", "motion", "\u25cd")]:
+            self._deck_button(Rd, label, f"start vision {mode}", mode, icon=icon, accent=col["pri"])
+        self._deck_button(Rd, "START RECORDING", "__record_start__", icon="\u25cf", accent=col["green"])
+        self._deck_button(Rd, "STOP RECORDING", "__record_stop__", icon="\u25a0", accent=col["red"])
+        self._deck_button(Rd, "STOP VISION", "stop vision", "STANDBY", icon="\u2715", accent=col["red"])
+
+        self._deck_label(Rd, "ONE-SHOT SCANS", col["acc"])
+        for label, command, icon in [
+                ("SNAPSHOT", "take a camera snapshot", "\u25eb"),
+                ("FACE COUNT", "count faces in front of the camera", "\u263a"),
+                ("READ QR", "read a QR code with the camera", "\u25a6"),
+                ("READ TEXT", "read text with the camera", "T"),
+                ("REMOVE BACKGROUND", "remove the background from the camera subject", "\u25cc"),
+                ("DESCRIBE SCENE", "describe everything visible to the camera", "\u25cd")]:
+            self._deck_button(Rd, label, command, icon=icon, accent=col["acc"])
+
+        self._deck_label(Rd, "STATUS", acc[0])
+        card = tk.Frame(Rd, bg=col["inp_border"])
+        card.pack(fill="x", padx=px(10), pady=px(4))
+        inner = tk.Frame(card, bg=col["input"])
+        inner.pack(fill="x", padx=px(1), pady=px(1))
+        self._vision_status = tk.Label(inner, text="\u25cf STANDBY", anchor="w",
+                                       bg=col["input"], fg=col["mid"],
                                        font=("Consolas", 9, "bold"))
-        self._vision_status.pack(fill="x", padx=12, pady=(10, 8))
-        self._deck_label(self._right_deck, "LOCAL CV MODULES")
-        for text in ("HAND LANDMARKS   READY", "POSE ESTIMATION   READY", "QR / FACE SCAN   READY"):
-            self._deck_label(self._right_deck, text, compact=True)
-        self._vision_signal_label = tk.Label(self._right_deck, text=self.vision_signal,
-                                              anchor="w", justify="left", wraplength=170,
-                                              bg=self.col["panel"], fg=self.col["text"],
-                                              font=("Consolas", 8))
-        self._vision_signal_label.pack(fill="x", padx=12, pady=(10, 12))
+        self._vision_status.pack(fill="x", padx=px(10), pady=px((8, 2)))
+        self._vision_signal_label = tk.Label(inner, text=self.vision_signal, anchor="w",
+                                             justify="left", wraplength=px(160),
+                                             bg=col["input"], fg=col["text"],
+                                             font=("Consolas", 8))
+        self._vision_signal_label.pack(fill="x", padx=px(10), pady=px((0, 8)))
+
+        self._deck_label(Rd, "LOCAL CV MODULES", acc[3])
+        for name in ("HAND LANDMARKS", "POSE ESTIMATION", "QR / FACE SCAN"):
+            self._deck_status_row(Rd, name, "READY")
+        tk.Frame(Rd, bg=col["panel"], height=px(10)).pack()
+
         self._bind_deck_mousewheel(self._left_deck, self._left_deck_canvas)
         self._bind_deck_mousewheel(self._right_deck, self._right_deck_canvas)
 
@@ -872,35 +1113,56 @@ class GHOSTUI:
 
         bind_children(parent)
 
-    def _create_scrollable_deck(self):
-        """Create a themed, vertically scrollable panel for compact displays."""
-        shell = tk.Frame(
-            self.root, bg=self.col["panel"],
-            highlightbackground=self.col["inp_border"], highlightthickness=1
-        )
-        canvas = tk.Canvas(
-            shell, bg=self.col["panel"], highlightthickness=0,
-            borderwidth=0, yscrollincrement=24
-        )
+    def _create_scrollable_deck(self, title="DECK", subtitle="", color=None):
+        """Themed deck: glowing header + vertically scrollable body."""
+        col = self.col
+        color = color or col["pri"]
+        shell = tk.Frame(self.root, bg=col["panel"],
+                         highlightbackground=col["inp_border"], highlightthickness=px(1))
+        header = _HiDPICanvas(shell, scale=self.S, height=px(54), bg=col["panel"],
+                              highlightthickness=0, borderwidth=0)
+        header.pack(side="top", fill="x")
+
+        def draw_header(event=None, h=header):
+            w = h.winfo_width() / self.S
+            if w < 50:
+                w = 190
+            h.delete("all")
+            h.create_polygon(self._hexpts(26, 26, 12, 0), outline=color,
+                             fill=self._mixc(col["panel"], color, 0.16), width=2)
+            h.create_oval(22, 22, 30, 30, fill=color, outline="")
+            h.create_text(48, 20, text=title, anchor="w", fill=color,
+                          font=("Consolas", 10, "bold"))
+            h.create_text(48, 37, text=subtitle, anchor="w", fill=col["mid"],
+                          font=("Consolas", 7))
+            h.create_oval(w - 20, 17, w - 13, 24, fill=col["green"], outline="")
+            h.create_line(10, 51, w - 10, 51, fill=col["inp_border"])
+            h.create_line(10, 51, 10 + (w - 20) * 0.38, 51, fill=color, width=2)
+            for x, dx in ((4, 1), (w - 4, -1)):
+                h.create_line(x, 4, x + dx * 8, 4, fill=color)
+                h.create_line(x, 4, x, 12, fill=color)
+
+        header.bind("<Configure>", draw_header)
+        draw_header()
+
+        body = tk.Frame(shell, bg=col["panel"])
+        body.pack(side="top", fill="both", expand=True)
+        canvas = tk.Canvas(body, bg=col["panel"], highlightthickness=0,
+                           borderwidth=0, yscrollincrement=px(24))
         scrollbar = tk.Scrollbar(
-            shell, orient="vertical", command=canvas.yview,
-            bg=self.col["panel"], troughcolor=self.col["hdr"],
-            activebackground=self.col["mid"], relief="flat", borderwidth=0,
-            width=7
+            body, orient="vertical", command=canvas.yview,
+            bg=col["panel"], troughcolor=col["hdr"], activebackground=col["mid"],
+            relief="flat", borderwidth=0, width=px(7)
         )
-        content = tk.Frame(canvas, bg=self.col["panel"])
+        content = tk.Frame(canvas, bg=col["panel"])
         window_id = canvas.create_window((0, 0), window=content, anchor="nw")
-        content.bind(
-            "<Configure>",
-            lambda event, c=canvas: c.configure(scrollregion=c.bbox("all"))
-        )
-        canvas.bind(
-            "<Configure>",
-            lambda event, c=canvas, item=window_id: c.itemconfigure(item, width=event.width)
-        )
+        content.bind("<Configure>",
+                     lambda event, c=canvas: c.configure(scrollregion=c.bbox("all")))
+        canvas.bind("<Configure>",
+                    lambda event, c=canvas, item=window_id: c.itemconfigure(item, width=event.width))
         canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.pack(side="left", fill="both", expand=True, padx=(1, 0), pady=1)
-        scrollbar.pack(side="right", fill="y", padx=(0, 2), pady=4)
+        canvas.pack(side="left", fill="both", expand=True, padx=px((1, 0)), pady=px(1))
+        scrollbar.pack(side="right", fill="y", padx=px((0, 2)), pady=px(4))
 
         def wheel(event, c=canvas):
             if event.delta:
@@ -911,38 +1173,175 @@ class GHOSTUI:
                 c.yview_scroll(1, "units")
             return "break"
 
-        for widget in (shell, canvas, content):
+        for widget in (shell, header, body, canvas, content):
             widget.bind("<MouseWheel>", wheel)
             widget.bind("<Button-4>", wheel)
             widget.bind("<Button-5>", wheel)
         return shell, content, canvas
 
     def _deck_title(self, parent, text, color):
-        tk.Label(parent, text=text, anchor="w", bg=self.col["panel"], fg=color,
-                 font=("Segoe UI", 10, "bold")).pack(fill="x", padx=13, pady=(14, 10))
+        """Kept for compatibility: decks now draw their own header."""
+        tk.Label(parent, text=text, fg=color, bg=self.col["panel"],
+                 font=("Consolas", 10, "bold")).pack(anchor="w", padx=px(12), pady=(px(8), px(4)))
 
-    def _deck_label(self, parent, text, compact=False):
-        tk.Label(parent, text=text, anchor="w", bg=self.col["panel"], fg=self.col["dim"],
-                 font=("Segoe UI", 8, "bold")).pack(fill="x", padx=13,
-                 pady=(5 if compact else 10, 3))
+    def _deck_status_row(self, parent, name, state):
+        col = self.col
+        row = tk.Frame(parent, bg=col["panel"])
+        row.pack(fill="x", padx=px(14), pady=px(2))
+        tk.Label(row, text=name, anchor="w", bg=col["panel"], fg=col["mid"],
+                 font=("Consolas", 8)).pack(side="left")
+        tk.Label(row, text="\u25cf " + state, bg=col["panel"], fg=col["green"],
+                 font=("Consolas", 8, "bold")).pack(side="right")
 
-    def _deck_button(self, parent, text, command, mode=None):
-        btn = tk.Button(
-            parent, text="  ›   " + text, anchor="w",
-            command=lambda: self._deck_command(command, mode),
-            bg=self.col["input"], fg=self.col["text"],
-            activebackground=self.col["pri"], activeforeground=self.col["bg"],
-            relief="flat", borderwidth=0, highlightthickness=1,
-            highlightbackground=self.col["inp_border"],
-            font=("Segoe UI", 8, "bold"), cursor="hand2",
-            padx=8, pady=5
+    def _deck_info_card(self, parent, rows):
+        """Bordered key/value card; returns {key: value_label}."""
+        col = self.col
+        card = tk.Frame(parent, bg=col["inp_border"])
+        card.pack(fill="x", padx=px(10), pady=px(4))
+        inner = tk.Frame(card, bg=col["input"])
+        inner.pack(fill="x", padx=px(1), pady=px(1))
+        labels = {}
+        for key, value in rows:
+            row = tk.Frame(inner, bg=col["input"])
+            row.pack(fill="x", padx=px(10), pady=px(3))
+            tk.Label(row, text=key, bg=col["input"], fg=col["mid"],
+                     font=("Consolas", 8, "bold")).pack(side="left")
+            lbl = tk.Label(row, text=value, bg=col["input"], fg=col["text"],
+                           font=("Consolas", 8, "bold"))
+            lbl.pack(side="right")
+            labels[key] = lbl
+        return labels
+
+    def _refresh_persona_card(self):
+        labels = getattr(self, "_persona_labels", None)
+        if not labels:
+            return
+        try:
+            labels["MODE"].configure(text=str(self.persona_mode).upper())
+            labels["MOOD"].configure(text=str(self.persona_mood).upper())
+            labels["VOICE"].configure(text=str(self.persona_voice))
+        except tk.TclError:
+            pass
+
+    # ── Chat panel ───────────────────────────────────────────────────────────
+
+    def _build_chat_panel(self, LW, LH, LOG_Y):
+        col = self.col
+        self.log_frame = tk.Frame(self.root, bg=col["panel"],
+                                  highlightbackground=col["inp_border"], highlightthickness=px(1))
+        self._pl(self.log_frame, x=(self.W - LW) // 2, y=LOG_Y, width=LW, height=LH)
+
+        self.log_header = tk.Frame(self.log_frame, bg=col["panel"])
+        self.log_header.pack(fill="x", padx=px(12), pady=px((8, 0)))
+        self.log_icon = tk.Label(self.log_header, text="\u25c8", bg=col["panel"], fg=col["pri"],
+                                 font=("Segoe UI Symbol", 9, "bold"))
+        self.log_icon.pack(side="left")
+        self.log_heading = tk.Label(self.log_header, text="  COMMUNICATION LINK",
+                                    bg=col["panel"], fg=col["pri"], anchor="w",
+                                    font=("Consolas", 8, "bold"))
+        self.log_heading.pack(side="left")
+        self.log_state = tk.Label(self.log_header, text="\u25cf STANDBY", bg=col["panel"],
+                                  fg=col["mid"], font=("Consolas", 8, "bold"))
+        self.log_state.pack(side="right")
+        self.log_rule = tk.Frame(self.log_frame, height=px(1), bg=col["inp_border"])
+        self.log_rule.pack(fill="x", padx=px(12), pady=px((7, 0)))
+
+        log_body = tk.Frame(self.log_frame, bg=col["panel"])
+        log_body.pack(fill="both", expand=True, padx=px((8, 4)), pady=px((2, 6)))
+        self.log_text = tk.Text(
+            log_body, fg=col["text"], bg=col["panel"], insertbackground=col["text"],
+            borderwidth=0, wrap="word", font=("Segoe UI", 10), padx=px(8), pady=px(4),
+            selectbackground=col["mid"], relief="flat", spacing1=px(3), spacing3=px(3),
+            tabs=("54p",), cursor="arrow", highlightthickness=0
         )
-        btn.pack(fill="x", padx=9, pady=3, ipady=2)
-        btn.bind("<Enter>", lambda event, b=btn: b.configure(
-            bg=self.col["dimmer"], highlightbackground=self.col["pri"]))
-        btn.bind("<Leave>", lambda event, b=btn: b.configure(
-            bg=self.col["input"], highlightbackground=self.col["inp_border"]))
+        self.log_scroll = tk.Scrollbar(
+            log_body, orient="vertical", command=self.log_text.yview, width=px(8),
+            bg=col["panel"], troughcolor=col["hdr"], activebackground=col["mid"],
+            relief="flat", borderwidth=0
+        )
+        self.log_text.configure(yscrollcommand=self.log_scroll.set)
+        self.log_scroll.pack(side="right", fill="y")
+        self.log_text.pack(side="left", fill="both", expand=True)
+        self.log_text.configure(state="disabled")
+        self._style_chat()
+
+    def _style_chat(self):
+        col = self.col
+        try:
+            self.log_frame.configure(bg=col["panel"], highlightbackground=col["inp_border"])
+            self.log_header.configure(bg=col["panel"])
+            self.log_icon.configure(bg=col["panel"], fg=col["pri"])
+            self.log_heading.configure(bg=col["panel"], fg=col["pri"])
+            self.log_state.configure(bg=col["panel"])
+            self.log_rule.configure(bg=col["inp_border"])
+            self.log_text.configure(fg=col["text"], bg=col["panel"],
+                                    insertbackground=col["text"], selectbackground=col["mid"])
+            self.log_scroll.configure(bg=col["panel"], troughcolor=col["hdr"],
+                                      activebackground=col["mid"])
+        except tk.TclError:
+            return
+        t = self.log_text
+        quiet = self._mixc(col["mid"], col["bg"], 0.35)
+        hang = dict(lmargin1=0, lmargin2="54p")
+        t.tag_config("ts", foreground=quiet, font=("Consolas", 7), **hang)
+        t.tag_config("lbl_you", foreground=col["acc"], font=("Consolas", 8, "bold"), **hang)
+        t.tag_config("lbl_ai", foreground=col["pri"], font=("Consolas", 8, "bold"), **hang)
+        t.tag_config("lbl_sys", foreground=col["mid"], font=("Consolas", 8, "bold"), **hang)
+        t.tag_config("lbl_err", foreground=col["red"], font=("Consolas", 8, "bold"), **hang)
+        t.tag_config("you", foreground=col["text"], **hang)
+        t.tag_config("ai", foreground=self._mixc(col["pri"], col["text"], 0.45), **hang)
+        t.tag_config("sys", foreground=self._mixc(col["acc2"], col["bg"], 0.2), **hang)
+        t.tag_config("err", foreground=col["red"], **hang)
+        self._update_log_state()
+
+    def _update_log_state(self):
+        lbl = getattr(self, "log_state", None)
+        if lbl is None:
+            return
+        col = self.col
+        s = str(self.status_text)
+        color = {"SPEAKING": col["acc"], "THINKING": col["acc2"], "PROCESSING": col["acc2"],
+                 "LISTENING": col["green"], "MUTED": col["mutcol"]}.get(s, col["pri"])
+        try:
+            lbl.configure(text="\u25cf " + s, fg=color)
+        except tk.TclError:
+            pass
+
+    def _update_input_hint(self, event=None):
+        hint = getattr(self, "_input_hint", None)
+        if hint is None:
+            return
+        if self._input_text.get("1.0", "end-1c"):
+            hint.place_forget()
+        else:
+            self._pl(hint, in_=self._input_text, x=6, rely=0.5, anchor="w")
+
+    def _input_focus(self, on):
+        col = self.col
+        color = col["pri"] if on else col["inp_border"]
+        try:
+            self._input_shell.configure(highlightbackground=color, highlightcolor=color)
+            self._input_glyph.configure(fg=col["pri"] if on else col["mid"])
+        except tk.TclError:
+            pass
+
+    def _deck_label(self, parent, text, color=None, compact=False):
+        col = self.col
+        color = color or col["mid"]
+        row = tk.Frame(parent, bg=col["panel"])
+        row.pack(fill="x", padx=px(12), pady=(5 if compact else 14, 4))
+        tk.Label(row, text="\u25c6", fg=color, bg=col["panel"],
+                 font=("Segoe UI Symbol", 6)).pack(side="left")
+        tk.Label(row, text=" " + text, fg=self._mixc(color, col["panel"], 0.2),
+                 bg=col["panel"], font=("Consolas", 8, "bold")).pack(side="left")
+        tk.Frame(row, bg=col["inp_border"], height=px(1)).pack(side="left", fill="x",
+                                                           expand=True, padx=px((8, 0)), pady=px((2, 0)))
+
+    def _deck_button(self, parent, text, command, mode=None, icon="\u203a", accent=None):
+        btn = _DeckButton(self, parent, text, icon, accent or self.col["pri"],
+                          lambda: self._deck_command(command, mode), mode)
         self._deck_buttons.append(btn)
+        return btn
 
     def _deck_command(self, command, mode=None):
         if command == "__open_akkhor__":
@@ -1014,9 +1413,9 @@ class GHOSTUI:
 
             if win is None or not win.winfo_exists():
                 win = tk.Toplevel(self.root)
-                win.title("GHOST | Smart Manufacturing Intelligence")
-                win.geometry("1150x780")
-                win.minsize(850, 550)
+                win.title(f"{self.brand['company'].title()} | GHOST \u2014 Smart Manufacturing Intelligence")
+                win.geometry(f"{px(1150)}x{px(780)}")
+                win.minsize(px(850), px(550))
                 win.configure(bg=self.col["bg"])
                 self._sm_dashboard_window = win
 
@@ -1032,7 +1431,7 @@ class GHOSTUI:
             filter_options = data.get("filter_options") or {}
 
             # Header
-            header = tk.Frame(win, bg=self.col["hdr"], padx=20, pady=14)
+            header = tk.Frame(win, bg=self.col["hdr"], padx=px(20), pady=px(14))
             header.pack(fill="x")
 
             tk.Label(
@@ -1045,7 +1444,7 @@ class GHOSTUI:
                 header, text=title,
                 bg=self.col["hdr"], fg=self.col["text"],
                 font=("Segoe UI", 19, "bold")
-            ).pack(anchor="w", pady=(7, 0))
+            ).pack(anchor="w", pady=px((7, 0)))
 
             filter_text = "  |  ".join(
                 f"{key.replace('_', ' ').title()}: {value}"
@@ -1057,7 +1456,7 @@ class GHOSTUI:
                     header, text=filter_text,
                     bg=self.col["hdr"], fg=self.col["dim"],
                     font=("Segoe UI", 9)
-                ).pack(anchor="w", pady=(5, 0))
+                ).pack(anchor="w", pady=px((5, 0)))
 
 
             # Interactive searchable Smart Manufacturing filters
@@ -1076,7 +1475,7 @@ class GHOSTUI:
             )
 
             filter_frame = tk.Frame(header, bg=self.col["hdr"])
-            filter_frame.pack(fill="x", pady=(12, 0))
+            filter_frame.pack(fill="x", pady=px((12, 0)))
 
             def record_names(records, default):
                 return [default] + [
@@ -1086,7 +1485,7 @@ class GHOSTUI:
 
             def create_search_dropdown(parent, label, variable, options_getter):
                 wrapper = tk.Frame(parent, bg=self.col["hdr"])
-                wrapper.pack(side="left", padx=(0, 9))
+                wrapper.pack(side="left", padx=px((0, 9)))
 
                 tk.Label(
                     wrapper,
@@ -1094,7 +1493,7 @@ class GHOSTUI:
                     bg=self.col["hdr"],
                     fg=self.col["dim"],
                     font=("Segoe UI", 8, "bold")
-                ).pack(anchor="w", pady=(0, 4))
+                ).pack(anchor="w", pady=px((0, 4)))
 
                 button = tk.Button(
                     wrapper,
@@ -1105,8 +1504,8 @@ class GHOSTUI:
                     activeforeground=self.col["bg"],
                     relief="flat",
                     bd=0,
-                    padx=12,
-                    pady=8,
+                    padx=px(12),
+                    pady=px(8),
                     width=23,
                     anchor="w",
                     font=("Segoe UI", 9),
@@ -1126,8 +1525,8 @@ class GHOSTUI:
                     popup.configure(bg=self.col["panel"])
                     popup.title(f"Select {label}")
 
-                    popup_width = max(280, button.winfo_width())
-                    popup_height = 275
+                    popup_width = max(px(280), button.winfo_width())
+                    popup_height = px(275)
 
                     button.update_idletasks()
                     x = button.winfo_rootx()
@@ -1138,7 +1537,7 @@ class GHOSTUI:
                     )
                     popup.resizable(False, False)
 
-                    body = tk.Frame(popup, bg=self.col["panel"], padx=10, pady=10)
+                    body = tk.Frame(popup, bg=self.col["panel"], padx=px(10), pady=px(10))
                     body.pack(fill="both", expand=True)
 
                     search_var = tk.StringVar()
@@ -1153,7 +1552,7 @@ class GHOSTUI:
                         bd=0,
                         font=("Segoe UI", 10)
                     )
-                    search.pack(fill="x", ipady=9, pady=(0, 9))
+                    search.pack(fill="x", ipady=px(9), pady=px((0, 9)))
                     search.insert(0, "")
 
                     list_frame = tk.Frame(body, bg=self.col["panel"])
@@ -1319,11 +1718,11 @@ class GHOSTUI:
                 fg=self.col["bg"],
                 activebackground=self.col["pri"],
                 relief="flat",
-                padx=12,
-                pady=8,
+                padx=px(12),
+                pady=px(8),
                 font=("Segoe UI", 9, "bold"),
                 cursor="hand2"
-            ).pack(side="left", padx=(5, 0), pady=(17, 0))
+            ).pack(side="left", padx=px((5, 0)), pady=px((17, 0)))
 
             # Scrollable dashboard body
             container = tk.Frame(win, bg=self.col["bg"])
@@ -1361,21 +1760,21 @@ class GHOSTUI:
             canvas.pack(side="left", fill="both", expand=True)
             scrollbar.pack(side="right", fill="y")
 
-            body.configure(padx=18, pady=18)
+            body.configure(padx=px(18), pady=px(18))
 
             def section_heading(text):
                 tk.Label(
                     body, text=text.upper(),
                     bg=self.col["bg"], fg=self.col["pri"],
                     font=("Consolas", 11, "bold")
-                ).pack(anchor="w", pady=(12, 8))
+                ).pack(anchor="w", pady=px((12, 8)))
 
             def show_table(columns, rows, widths=None):
                 table_frame = tk.Frame(body, bg=self.col["panel"])
-                table_frame.pack(fill="x", pady=5)
+                table_frame.pack(fill="x", pady=px(5))
 
                 table = tk.Frame(table_frame, bg=self.col["panel"])
-                table.pack(fill="x", padx=8, pady=8)
+                table.pack(fill="x", padx=px(8), pady=px(8))
 
                 for col_index, column in enumerate(columns):
                     tk.Label(
@@ -1383,7 +1782,7 @@ class GHOSTUI:
                         bg=self.col["hdr"], fg=self.col["pri"],
                         font=("Segoe UI", 9, "bold"),
                         anchor="w",
-                        padx=7, pady=9,
+                        padx=px(7), pady=px(9),
                         width=widths[col_index] if widths else 16
                     ).grid(row=0, column=col_index, sticky="nsew")
 
@@ -1398,8 +1797,8 @@ class GHOSTUI:
                             table, text=str(value),
                             bg=self.col["panel"], fg=self.col["text"],
                             font=("Segoe UI", 9),
-                            anchor="w", padx=7, pady=7,
-                            wraplength=180
+                            anchor="w", padx=px(7), pady=px(7),
+                            wraplength=px(180)
                         ).grid(
                             row=row_index, column=col_index,
                             sticky="nsew"
@@ -1426,14 +1825,14 @@ class GHOSTUI:
                     value = summary.get(key, 0)
                     card = tk.Frame(
                         grid, bg=self.col["panel"],
-                        padx=14, pady=13,
+                        padx=px(14), pady=px(13),
                         highlightbackground=self.col["dim"],
-                        highlightthickness=1
+                        highlightthickness=px(1)
                     )
 
                     card.grid(
                         row=index // 3, column=index % 3,
-                        padx=5, pady=5, sticky="nsew"
+                        padx=px(5), pady=px(5), sticky="nsew"
                     )
 
                     tk.Label(
@@ -1448,7 +1847,7 @@ class GHOSTUI:
                         ) else str(value),
                         bg=self.col["panel"], fg=self.col["pri"],
                         font=("Segoe UI", 21, "bold")
-                    ).pack(anchor="w", pady=(7, 0))
+                    ).pack(anchor="w", pady=px((7, 0)))
 
                 for column in range(3):
                     grid.grid_columnconfigure(column, weight=1)
@@ -1488,11 +1887,11 @@ class GHOSTUI:
                         bg=self.col["bg"], fg=self.col["text"]
                     ).pack(anchor="w")
                 else:
-                    chart = tk.Canvas(
-                        body, height=max(160, len(items) * 58),
+                    chart = _HiDPICanvas(
+                        body, scale=self.S, height=px(max(160, len(items) * 58)),
                         bg=self.col["panel"], highlightthickness=0
                     )
-                    chart.pack(fill="x", pady=5)
+                    chart.pack(fill="x", pady=px(5))
 
                     values = [
                         float(item.get("total_machines", 0) or 0)
@@ -1503,7 +1902,7 @@ class GHOSTUI:
                     chart.bind(
                         "<Configure>",
                         lambda event: self._draw_sm_ranking_chart(
-                            chart, items, maximum, event.width
+                            chart, items, maximum, event.width / self.S
                         )
                     )
 
@@ -1543,8 +1942,8 @@ class GHOSTUI:
                     body, text=f"Total affected sections: {len(rows)}",
                     bg=self.col["panel"], fg=self.col["acc"],
                     font=("Segoe UI", 13, "bold"),
-                    padx=14, pady=12
-                ).pack(fill="x", pady=5)
+                    padx=px(14), pady=px(12)
+                ).pack(fill="x", pady=px(5))
 
                 show_table(["section"], rows, [55])
 
@@ -1663,6 +2062,7 @@ class GHOSTUI:
         else:
             self.status_text = "ONLINE"
             self.speaking    = False
+        self._update_log_state()
 
     # ── Face loading ─────────────────────────────────────────────────────────
 
@@ -1754,223 +2154,722 @@ class GHOSTUI:
             return ""
         return f"🔋 {self._batt_cache}%"
 
-    # ── Drawing ──────────────────────────────────────────────────────────────
+    # ── Robotic stage ────────────────────────────────────────────────────────
+    # Layout (matches the reference): neural / mesh / subsystem panels on top,
+    # status cards left + right wired into a floating robot core on a glowing
+    # platform, and an icon dock at the bottom.
+
+    @staticmethod
+    def _rgb(c):
+        if isinstance(c, (tuple, list)):
+            return int(c[0]), int(c[1]), int(c[2])
+        c = c.lstrip("#")
+        return int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+
+    def _mixc(self, a, b, f):
+        ra, ga, ba = self._rgb(a)
+        rb, gb, bb = self._rgb(b)
+        f = max(0.0, min(1.0, f))
+        return "#%02x%02x%02x" % (int(ra + (rb - ra) * f),
+                                  int(ga + (gb - ga) * f),
+                                  int(ba + (bb - ba) * f))
+
+    def _lit(self, color, f):
+        """`color` at intensity f over the background (fake alpha)."""
+        return self._mixc(self.col["bg"], color, f)
+
+    def _glow_hex(self):
+        rgb = self.col["halo_mut"] if self.muted else self.col["halo"]
+        return "#%02x%02x%02x" % tuple(int(v) for v in rgb)
+
+    def _accents(self):
+        col = self.col
+        return [col["pri"], col["acc"], col["acc2"], col.get("blue", col["mid"])]
+
+    def _rr(self, x0, y0, x1, y1, r=10, **kw):
+        r = max(1, min(r, (x1 - x0) / 2, (y1 - y0) / 2))
+        pts = [x0 + r, y0, x1 - r, y0, x1, y0, x1, y0 + r,
+               x1, y1 - r, x1, y1, x1 - r, y1, x0 + r, y1,
+               x0, y1, x0, y1 - r, x0, y0 + r, x0, y0]
+        return self.bg.create_polygon(pts, smooth=True, **kw)
+
+    @staticmethod
+    def _hexpts(cx, cy, r, rot=0.0):
+        pts = []
+        for k in range(6):
+            a = math.radians(60 * k + rot)
+            pts += [cx + r * math.cos(a), cy + r * math.sin(a)]
+        return pts
+
+    def _stage_layout(self):
+        W, H = self.W, self.H
+        wide = W >= 980
+        sx0 = 228 if wide else 18
+        sx1 = W - 238 if wide else W - 18
+        top = 90
+        bottom = max(top + 260, getattr(self, "_stage_bottom", H - 250))
+        sw, sh = sx1 - sx0, bottom - top
+        L = {"sx0": sx0, "sx1": sx1, "top": top, "bottom": bottom,
+             "sw": sw, "sh": sh, "cx": (sx0 + sx1) / 2}
+        ph = max(66, min(128, sh * 0.26))
+        dh = max(46, min(68, sh * 0.15))
+        gap = 10
+        wl = (sw - 2 * gap) * 0.28
+        wc = (sw - 2 * gap) * 0.44
+        L["ph"], L["dh"] = ph, dh
+        L["panels"] = [
+            (sx0, top, sx0 + wl, top + ph),
+            (sx0 + wl + gap, top, sx0 + wl + gap + wc, top + ph),
+            (sx1 - wl, top, sx1, top + ph),
+        ]
+        L["dock_y0"] = bottom - dh
+        my0 = top + ph + 10
+        my1 = L["dock_y0"] - 8
+        mh = my1 - my0
+        R = max(26, min(80, (mh - 54) / 2.75, sw * 0.095))
+        used = 2.75 * R + 54
+        cy = my0 + max(0, (mh - used) / 2) + 1.1 * R + 4
+        L.update(R=R, cy=cy, py=cy + 1.2 * R, ym=(my0 + my1) / 2,
+                 mw=max(104, min(170, sw * 0.22)),
+                 rowh=max(28, min(44, (mh - 10) / 4.6)))
+        return L
+
+    def _card_boxes(self, L):
+        mw, rowh, ym = L["mw"], L["rowh"], L["ym"]
+        gap = rowh * 0.3
+
+        def column(n, x0):
+            total = n * rowh + (n - 1) * gap
+            y = ym - total / 2
+            return [(x0, y + i * (rowh + gap), x0 + mw, y + i * (rowh + gap) + rowh)
+                    for i in range(n)]
+        return column(3, L["sx0"]), column(4, L["sx1"] - mw)
+
+    def _net_data(self, key, n, thr, seed, ellipse=False):
+        cache = self.__dict__.setdefault("_net_cache", {})
+        if key not in cache:
+            rng = random.Random(seed)
+            pts = []
+            for _ in range(6000):
+                if len(pts) >= n:
+                    break
+                u, v = rng.random(), rng.random()
+                if ellipse and ((u - .5) / .5) ** 2 + ((v - .5) / .5) ** 2 > 1:
+                    continue
+                if all((u - p[0]) ** 2 + (v - p[1]) ** 2 > 0.016 for p in pts):
+                    pts.append((u, v))
+            n = len(pts)
+            edges = [(i, j) for i in range(n) for j in range(i + 1, n)
+                     if (pts[i][0] - pts[j][0]) ** 2 + (pts[i][1] - pts[j][1]) ** 2 < thr ** 2]
+            hub = sorted(range(n), key=lambda i: (pts[i][0] - .5) ** 2 + (pts[i][1] - .5) ** 2)[:6]
+            cache[key] = (pts, edges, hub)
+        return cache[key]
+
+    def _sys_stats(self):
+        now = time.time()
+        if getattr(self, "_stats", None) is None or now - self._stats_ts > 1.0:
+            self._stats_ts = now
+            try:
+                psutil = import_module("psutil")
+                self._stats = {"cpu": psutil.cpu_percent(interval=None),
+                               "mem": psutil.virtual_memory().percent}
+            except Exception:
+                self._stats = {"cpu": None, "mem": None}
+        return self._stats
+
+    def _update_telemetry(self, t):
+        if t % 24 == 0:
+            for i in range(4):
+                self._tele_t[i] = max(0.05, min(1.0, random.uniform(0.1, 0.45)
+                                                + self._act * random.uniform(0.2, 0.55)))
+        for i in range(4):
+            self._tele[i] += (self._tele_t[i] - self._tele[i]) * 0.08
+
+    # ── Main draw ─────────────────────────────────────────────────────────────
 
     def _draw(self):
-        c    = self.bg
-        W, H = self.W, self.H
-        t    = self.tick
-        FCX  = self.FCX
-        FCY  = self.FCY
-        FW   = self.FACE_SZ
-        col  = self.col
+        c = self.bg
+        W, H, t = self.W, self.H, self.tick
+        col = self.col
         c.delete("all")
 
-        # Background grid
+        target = (1.0 if self.speaking else
+                  0.7 if self._state in ("THINKING", "PROCESSING") else
+                  0.05 if self.muted else 0.3)
+        self._act += (target - self._act) * 0.08
+        self._update_telemetry(t)
+
+        acc = self._accents()
+        L = self._stage_layout()
+        self._dock_rects = []
+
         for x in range(0, W, 52):
             for y in range(0, H, 52):
-                c.create_rectangle(x, y, x+1, y+1, fill=col["dimmer"], outline="")
+                c.create_rectangle(x, y, x + 1, y + 1, fill=col["dimmer"], outline="")
 
-        # Halo rings
-        halo_rgb  = col["halo_mut"] if self.muted else col["halo"]
-        for r in range(int(FW * 0.54), int(FW * 0.28), -22):
-            frac = 1.0 - (r - FW * 0.28) / (FW * 0.26)
-            ga   = max(0, min(255, int(self.halo_a * 0.09 * frac)))
-            c.create_oval(FCX-r, FCY-r, FCX+r, FCY+r,
-                          outline=self._ac(*halo_rgb, ga), width=2)
+        sy = L["top"] + (t * 1.4) % max(1, L["sh"])
+        c.create_line(L["sx0"], sy, L["sx1"], sy, fill=self._lit(col["pri"], 0.10), width=1)
 
-        # Pulse waves
-        for pr in self.pulse_r:
-            pa = max(0, int(220 * (1.0 - pr / (FW * 0.72))))
-            r  = int(pr)
-            colr = halo_rgb if not self.muted else (255, 30, 80)
-            c.create_oval(FCX-r, FCY-r, FCX+r, FCY+r,
-                          outline=self._ac(*colr, pa if not self.muted else pa // 3),
-                          width=2)
+        for box, fn in zip(L["panels"], (self._panel_neural, self._panel_mesh,
+                                         self._panel_systems)):
+            fn(box, t, acc)
 
-        # Spinning rings
-        for idx, (r_frac, w_ring, arc_l, gap) in enumerate([
-                (0.47, 3, 110, 75), (0.39, 2, 75, 55), (0.31, 1, 55, 38)]):
-            ring_r = int(FW * r_frac)
-            base_a = self.rings_spin[idx]
-            a_val  = max(0, min(255, int(self.halo_a * (1.0 - idx * 0.18))))
-            rcol   = halo_rgb if not self.muted else (255, 30, 80)
-            for s in range(360 // (arc_l + gap)):
-                start = (base_a + s * (arc_l + gap)) % 360
-                c.create_arc(FCX-ring_r, FCY-ring_r, FCX+ring_r, FCY+ring_r,
-                             start=start, extent=arc_l,
-                             outline=self._ac(*rcol, a_val), width=w_ring, style="arc")
+        self._draw_wires(L, t, acc)
+        self._draw_platform(L, t)
+        self._draw_robot(L, t)
+        self._draw_cards(L, t, acc)
+        self._draw_dock(L, t, acc)
+        self._draw_status(L, t)
+        self._draw_chrome(t)
 
-        # Scan arcs
-        sr      = int(FW * 0.49)
-        scan_a  = min(255, int(self.halo_a * 1.4))
-        arc_ext = 70 if self.speaking else 42
-        c.create_arc(FCX-sr, FCY-sr, FCX+sr, FCY+sr,
-                     start=self.scan_angle, extent=arc_ext,
-                     outline=self._ac(*halo_rgb, scan_a), width=3, style="arc")
-        c.create_arc(FCX-sr, FCY-sr, FCX+sr, FCY+sr,
-                     start=self.scan2_angle, extent=arc_ext,
-                     outline=self._ac(*col["scan2"], scan_a // 2), width=2, style="arc")
+    # ── Top panels ────────────────────────────────────────────────────────────
 
-        # Ticks
-        t_out = int(FW * 0.495)
-        t_in  = int(FW * 0.472)
-        a_mk  = self._ac(*halo_rgb, 155)
-        for deg in range(0, 360, 10):
-            rad = math.radians(deg)
-            inn = t_in if deg % 30 == 0 else t_in + 5
-            c.create_line(FCX + t_out * math.cos(rad), FCY - t_out * math.sin(rad),
-                          FCX + inn  * math.cos(rad), FCY - inn  * math.sin(rad),
-                          fill=a_mk, width=1)
+    def _panel_frame(self, box, title):
+        x0, y0, x1, y1 = box
+        self._rr(x0, y0, x1, y1, 12, fill=self.col["panel"],
+                 outline=self.col["dim"], width=1)
+        self.bg.create_text(x0 + 12, y0 + 10, text=title, fill=self.col["mid"],
+                            font=("Consolas", 7, "bold"), anchor="w")
 
-        # Crosshair
-        ch_r = int(FW * 0.50)
-        gap  = int(FW * 0.15)
-        ch_a = self._ac(*halo_rgb, int(self.halo_a * 0.55))
-        for x1, y1, x2, y2 in [
-                (FCX - ch_r, FCY, FCX - gap, FCY), (FCX + gap, FCY, FCX + ch_r, FCY),
-                (FCX, FCY - ch_r, FCX, FCY - gap), (FCX, FCY + gap, FCX, FCY + ch_r)]:
-            c.create_line(x1, y1, x2, y2, fill=ch_a, width=1)
-
-        # Corner brackets
-        blen = 22
-        bc   = self._ac(*halo_rgb, 200)
-        hl = FCX - FW // 2; hr = FCX + FW // 2
-        ht = FCY - FW // 2; hb = FCY + FW // 2
-        for bx, by, sdx, sdy in [(hl, ht, 1, 1), (hr, ht, -1, 1),
-                                   (hl, hb, 1, -1), (hr, hb, -1, -1)]:
-            c.create_line(bx, by, bx + sdx * blen, by,            fill=bc, width=2)
-            c.create_line(bx, by, bx,               by + sdy * blen, fill=bc, width=2)
-
-        # Face / orb
-        if self._has_face:
-            fw = int(FW * self.scale)
-            if (self._face_scale_cache is None or
-                    abs(self._face_scale_cache[0] - self.scale) > 0.004):
-                scaled = self._face_pil.resize((fw, fw), Image.BILINEAR)
-                tk_img = ImageTk.PhotoImage(scaled)
-                self._face_scale_cache = (self.scale, tk_img)
-            c.create_image(FCX, FCY, image=self._face_scale_cache[1])
-        else:
-            orb_r = int(FW * 0.27 * self.scale)
-            orb_color = (255, 30, 80) if self.muted else col["orb"]
-            for i in range(7, 0, -1):
-                r2   = int(orb_r * i / 7)
-                frac = i / 7
-                ga   = max(0, min(255, int(self.halo_a * 1.1 * frac)))
-                c.create_oval(FCX-r2, FCY-r2, FCX+r2, FCY+r2,
-                              fill=self._ac(int(orb_color[0]*frac),
-                                            int(orb_color[1]*frac),
-                                            int(orb_color[2]*frac), ga),
+    def _panel_neural(self, box, t, acc):
+        c, col = self.bg, self.col
+        x0, y0, x1, y1 = box
+        self._panel_frame(box, self.brand["panels"][0])
+        w = x1 - x0
+        bx0, by0, bx1, by1 = x0 + 12, y0 + 24, x0 + 12 + w * 0.40, y1 - 10
+        pts, edges, _ = self._net_data("brain", 15, 0.36, 5, ellipse=True)
+        xy = [(bx0 + u * (bx1 - bx0) + math.sin(t * 0.02 + i * 1.3) * 1.5,
+               by0 + v * (by1 - by0) + math.cos(t * 0.017 + i) * 1.5)
+              for i, (u, v) in enumerate(pts)]
+        for i, j in edges:
+            c.create_line(*xy[i], *xy[j], fill=self._lit(col["pri"], 0.28 + 0.25 * self._act))
+        for i, (px, py_) in enumerate(xy):
+            k = 0.55 + 0.45 * math.sin(t * 0.06 + i)
+            r = 1.6 + k
+            c.create_oval(px - r, py_ - r, px + r, py_ + r,
+                          fill=self._lit(acc[i % 4], 0.5 + 0.5 * k), outline="")
+        rx0, rx1 = x0 + w * 0.52, x1 - 12
+        rh = (y1 - y0 - 34) / 4
+        for i in range(4):
+            y = y0 + 28 + rh * i + rh / 2
+            a = acc[i % 4]
+            c.create_oval(rx0 - 3, y - 3, rx0 + 3, y + 3, fill=a, outline="")
+            bs, be = rx0 + 10, rx1 - 22
+            c.create_line(bs, y, be, y, fill=self._lit(a, 0.18), width=3, capstyle="round")
+            c.create_line(bs, y, bs + (be - bs) * self._tele[i], y, fill=a,
+                          width=3, capstyle="round")
+            for d in range(3):
+                c.create_oval(rx1 - 14 + d * 6 - 1, y - 1, rx1 - 14 + d * 6 + 1, y + 1,
+                              fill=self._lit(a, 0.6 if d <= int(self._tele[i] * 3) else 0.2),
                               outline="")
-            c.create_text(FCX, FCY, text=SYSTEM_NAME,
-                          fill=self._ac(*halo_rgb, min(255, int(self.halo_a * 2))),
-                          font=("Segoe UI", 14, "bold"))
 
-        # ── Header ────────────────────────────────────────────────────────────
+    def _panel_mesh(self, box, t, acc):
+        c, col = self.bg, self.col
+        x0, y0, x1, y1 = box
+        self._panel_frame(box, self.brand["panels"][1])
+        pts, edges, hub = self._net_data("mesh", 16, 0.34, 11)
+        ix0, iy0, ix1, iy1 = x0 + 14, y0 + 24, x1 - 14, y1 - 10
+        xy = [(ix0 + u * (ix1 - ix0) + math.sin(t * 0.021 + i * 1.7) * 2,
+               iy0 + v * (iy1 - iy0) + math.cos(t * 0.018 + i * 0.9) * 2)
+              for i, (u, v) in enumerate(pts)]
+        hx, hy = (x0 + x1) / 2, (iy0 + iy1) / 2
+        for i, j in edges:
+            c.create_line(*xy[i], *xy[j], fill=self._lit(col["mid"], 0.45))
+        for k, i in enumerate(hub):
+            c.create_line(*xy[i], hx, hy, fill=self._lit(col["pri"], 0.55))
+            ph = (t * (0.006 + 0.012 * self._act) + k * 0.19) % 1.0
+            px = xy[i][0] + (hx - xy[i][0]) * ph
+            py_ = xy[i][1] + (hy - xy[i][1]) * ph
+            c.create_oval(px - 2, py_ - 2, px + 2, py_ + 2, fill=col["pri"], outline="")
+        for i, (px, py_) in enumerate(xy):
+            a = acc[i % 4]
+            k = 0.5 + 0.5 * math.sin(t * 0.05 + i * 0.8)
+            c.create_oval(px - 4, py_ - 4, px + 4, py_ + 4, fill=self._lit(a, 0.12 + 0.2 * k),
+                          outline="")
+            c.create_oval(px - 2.2, py_ - 2.2, px + 2.2, py_ + 2.2, fill=a, outline="")
+        hr = min(x1 - x0, y1 - y0) * 0.16
+        pulse = 0.5 + 0.5 * math.sin(t * 0.08)
+        c.create_oval(hx - hr * 1.5, hy - hr * 1.5, hx + hr * 1.5, hy + hr * 1.5,
+                      outline=self._lit(col["pri"], 0.2 + 0.3 * pulse), width=1)
+        c.create_polygon(self._hexpts(hx, hy, hr, 30), fill=col["panel"],
+                         outline=col["pri"], width=2)
+        c.create_polygon(self._hexpts(hx, hy, hr * 0.62, 30),
+                         fill=self._lit(col["pri"], 0.35 + 0.3 * self._act),
+                         outline=col["pri"], width=1)
+        c.create_polygon(self._hexpts(hx, hy, hr * 0.25, 30), fill=col["text"], outline="")
+
+    def _panel_systems(self, box, t, acc):
+        c, col = self.bg, self.col
+        x0, y0, x1, y1 = box
+        self._panel_frame(box, self.brand["panels"][2])
+        w, h = x1 - x0, y1 - y0
+        pad, g = 9, 6
+        tw = (w - 2 * pad - 2 * g) / 3
+        th = (h - 24 - pad - g) / 2
+        for r in range(2):
+            for k in range(3):
+                idx = r * 3 + k
+                tx0 = x0 + pad + k * (tw + g)
+                ty0 = y0 + 24 + r * (th + g)
+                a = acc[idx % 4]
+                self._rr(tx0, ty0, tx0 + tw, ty0 + th, 6, fill=col["hdr"],
+                         outline=self._lit(a, 0.35), width=1)
+                c.create_line(tx0 + 6, ty0 + 6, tx0 + 6 + tw * 0.42, ty0 + 6,
+                              fill=a, width=2, capstyle="round")
+                c.create_oval(tx0 + tw - 9, ty0 + 4, tx0 + tw - 5, ty0 + 8,
+                              fill=self._lit(a, 0.5 + 0.5 * math.sin(t * 0.08 + idx)), outline="")
+                cols, rows = 5, 3
+                ax0, ay0 = tx0 + 7, ty0 + 14
+                dx = (tw - 14) / cols
+                dy = max(4, (th - 20) / rows)
+                for jy in range(rows):
+                    for jx in range(cols):
+                        v = math.sin(t * 0.05 * (1 + idx * 0.13) + jx * 1.3 + jy * 2.1)
+                        on = v > (0.55 - self._act * 0.55)
+                        px, py_ = ax0 + jx * dx + dx / 2, ay0 + jy * dy + dy / 2
+                        c.create_rectangle(px - 1.2, py_ - 1.2, px + 1.2, py_ + 1.2,
+                                           fill=a if on else self._lit(a, 0.18), outline="")
+
+    # ── Wires, platform, robot ────────────────────────────────────────────────
+
+    @staticmethod
+    def _wire_points(p0, p1, n=28):
+        (x0, y0), (x1, y1) = p0, p1
+        dx = (x1 - x0) * 0.55
+        pts = []
+        for i in range(n + 1):
+            u = i / n
+            v = 1 - u
+            pts.append((v ** 3 * x0 + 3 * v * v * u * (x0 + dx) + 3 * v * u * u * (x1 - dx) + u ** 3 * x1,
+                        v ** 3 * y0 + 3 * v * v * u * y0 + 3 * v * u * u * y1 + u ** 3 * y1))
+        return pts
+
+    def _draw_wires(self, L, t, acc):
+        c, col = self.bg, self.col
+        cx, cy, R = L["cx"], L["cy"], L["R"]
+        left, right = self._card_boxes(L)
+        speed = 0.004 + 0.010 * self._act
+        wires = []
+        for i, b in enumerate(left):
+            wires.append(((b[2], (b[1] + b[3]) / 2), (cx - R * 0.95, cy + (i - 1) * R * 0.22), acc[i % 4], 1))
+        for i, b in enumerate(right):
+            wires.append(((b[0], (b[1] + b[3]) / 2), (cx + R * 0.95, cy + (i - 1.5) * R * 0.22), acc[i % 4], -1))
+        for k, (p0, p1, color, direction) in enumerate(wires):
+            pts = self._wire_points(p0, p1)
+            c.create_line(*[v for p in pts for v in p], fill=self._lit(color, 0.45),
+                          width=1, smooth=True)
+            for d in range(2):
+                ph = (t * speed + k * 0.173 + d * 0.5) % 1.0
+                if direction < 0:
+                    ph = 1 - ph
+                px, py_ = pts[min(len(pts) - 1, int(ph * len(pts)))]
+                c.create_oval(px - 5, py_ - 5, px + 5, py_ + 5, fill=self._lit(color, 0.22), outline="")
+                c.create_oval(px - 2, py_ - 2, px + 2, py_ + 2, fill=color, outline="")
+        # mesh panel -> head
+        ytop, ybot = L["panels"][1][3], cy - R * 1.1
+        c.create_line(cx, ytop, cx, ybot, fill=self._lit(col["pri"], 0.5), width=1)
+        ph = (t * speed * 1.4) % 1.0
+        py_ = ytop + (ybot - ytop) * ph
+        c.create_oval(cx - 2, py_ - 2, cx + 2, py_ + 2, fill=col["pri"], outline="")
+
+    def _draw_platform(self, L, t):
+        c, col = self.bg, self.col
+        cx, py, R = L["cx"], L["py"], L["R"]
+        rx, ry = R * 1.95, R * 0.44
+        glow = self._glow_hex()
+        base = self._mixc(col["hdr"], "#000000", 0.45)
+        for dy in range(10, 0, -2):
+            c.create_oval(cx - rx, py - ry + dy, cx + rx, py + ry + dy, fill=base, outline="")
+        c.create_oval(cx - rx, py - ry, cx + rx, py + ry, fill=col["hdr"],
+                      outline=self._lit(glow, 0.75), width=2)
+        pulse = 0.55 + 0.30 * math.sin(t * 0.07) + 0.3 * self._act
+        for f, w in ((0.88, 3), (0.66, 2), (0.44, 2)):
+            a = max(0.15, min(1.0, pulse * (1.1 - f * 0.5)))
+            c.create_oval(cx - rx * f, py - ry * f, cx + rx * f, py + ry * f,
+                          outline=self._lit(glow, a), width=w)
+        for k in range(4, 0, -1):
+            f = 0.12 * k
+            c.create_oval(cx - rx * f, py - ry * f, cx + rx * f, py + ry * f,
+                          fill=self._lit(glow, 0.07 * (5 - k) * (0.5 + self._act)), outline="")
+        limit = self.FACE_SZ * 0.72
+        for pr in self.pulse_r:
+            f = min(1.0, pr / limit)
+            a = (1 - f) * (0.25 if self.muted else 0.8)
+            c.create_oval(cx - rx * f * 1.05, py - ry * f * 1.05, cx + rx * f * 1.05,
+                          py + ry * f * 1.05, outline=self._lit(glow, a), width=1)
+
+    def _draw_robot(self, L, t):
+        c, col = self.bg, self.col
+        cx, R = L["cx"], L["R"]
+        cy = L["cy"] + (0 if self.muted else math.sin(t * 0.05) * R * 0.05)
+        glow = self._glow_hex()
+
+        for i, k in enumerate((1.75, 1.5, 1.28)):
+            a = max(0.05, min(0.6, self.halo_a / 255 * (0.9 - i * 0.2)))
+            c.create_oval(cx - R * k, cy - R * k, cx + R * k, cy + R * k,
+                          outline=self._lit(glow, a * 0.8), width=1)
+        for idx, (k, w, ext) in enumerate(((1.62, 2, 70), (1.40, 1, 50))):
+            r_ = R * k
+            for s in range(3):
+                c.create_arc(cx - r_, cy - r_, cx + r_, cy + r_,
+                             start=(self.rings_spin[idx] + s * 120) % 360, extent=ext,
+                             outline=self._lit(glow, 0.8 - idx * 0.25), width=w, style="arc")
+
+        pod = self._mixc(col["hdr"], "#ffffff", 0.10)
+        for sgn in (-1, 1):
+            ex = cx + sgn * R
+            self._rr(ex - R * 0.10, cy - R * 0.24, ex + R * 0.10, cy + R * 0.24, 4,
+                     fill=pod, outline=self._lit(glow, 0.8), width=1)
+            c.create_line(ex, cy - R * 0.14, ex, cy + R * 0.14, fill=glow, width=2)
+        c.create_oval(cx - R * 0.55, cy + R * 0.80, cx + R * 0.55, cy + R * 1.12,
+                      fill=self._mixc(col["hdr"], "#000000", 0.3),
+                      outline=self._lit(glow, 0.45))
+
+        if self._has_face:
+            fw = max(8, int(2 * R * self.scale * self.S))
+            cache = getattr(self, "_face_cache2", None)
+            if cache is None or cache[0] != fw:
+                cache = (fw, ImageTk.PhotoImage(self._face_pil.resize((fw, fw), Image.BILINEAR)))
+                self._face_cache2 = cache
+            c.create_image(cx, cy, image=cache[1])
+            c.create_oval(cx - R, cy - R, cx + R, cy + R, outline=self._lit(glow, 0.9), width=2)
+            return
+
+        steps = 16
+        for i in range(steps):
+            f = i / (steps - 1)
+            r = R * (1 - 0.78 * f)
+            sh = int(105 + 145 * f)
+            color = "#%02x%02x%02x" % (sh - 14, sh - 4, min(255, sh + 6))
+            c.create_oval(cx - R * 0.30 * f - r, cy - R * 0.34 * f - r,
+                          cx - R * 0.30 * f + r, cy - R * 0.34 * f + r,
+                          fill=color, outline="")
+        c.create_oval(cx - R, cy - R, cx + R, cy + R, outline=self._lit(glow, 0.9), width=2)
+
+        vy = cy + R * 0.06
+        c.create_oval(cx - R * 0.70, vy - R * 0.44, cx + R * 0.70, vy + R * 0.44,
+                      fill=self._mixc(col["bg"], "#000000", 0.55),
+                      outline=self._lit(glow, 0.35), width=2)
+
+        ew, base_h = R * 0.17, R * 0.25
+        if self.muted:
+            hh = base_h * 0.30
+        elif self.speaking:
+            hh = base_h * (0.8 + 0.25 * math.sin(t * 0.45))
+        else:
+            hh = base_h
+        if (t % 220) < 7 and not self.muted:
+            hh *= 0.12
+        if self._state in ("THINKING", "PROCESSING"):
+            look = math.sin(t * 0.07) * R * 0.07
+        else:
+            look = math.sin(t * 0.013) * R * 0.015
+        for sgn in (-1, 1):
+            ex = cx + sgn * R * 0.28 + look
+            for g, a in ((1.55, 0.18), (1.28, 0.38)):
+                c.create_oval(ex - ew * g, vy - hh * g, ex + ew * g, vy + hh * g,
+                              fill=self._lit(glow, a), outline="")
+            c.create_oval(ex - ew, vy - hh, ex + ew, vy + hh, fill=glow, outline="")
+            c.create_oval(ex - ew * 0.45, vy - hh * 0.75, ex + ew * 0.1, vy - hh * 0.2,
+                          fill=self._mixc(glow, "#ffffff", 0.65), outline="")
+        c.create_oval(cx - R * 0.64, cy - R * 0.88, cx - R * 0.10, cy - R * 0.58,
+                      fill="#f4fbfd", outline="")
+
+    # ── Status cards ──────────────────────────────────────────────────────────
+
+    def _card_left(self, box, accent, label, valtxt, value, t):
+        c, col = self.bg, self.col
+        x0, y0, x1, y1 = box
+        h = y1 - y0
+        self._rr(x0, y0, x1, y1, 10, fill=col["panel"], outline=self._lit(accent, 0.4), width=1)
+        hx, hy = x0 + h * 0.55, (y0 + y1) / 2
+        c.create_polygon(self._hexpts(hx, hy, h * 0.30, 0), outline=accent,
+                         fill=self._lit(accent, 0.14), width=2)
+        c.create_oval(hx - 3, hy - 3, hx + 3, hy + 3, fill=accent, outline="")
+        tx = x0 + h * 1.05
+        c.create_text(tx, y0 + h * 0.28, text=label, fill=col["text"],
+                      font=("Consolas", 7, "bold"), anchor="w")
+        c.create_text(x1 - 24, y0 + h * 0.28, text=valtxt, fill=accent,
+                      font=("Consolas", 7, "bold"), anchor="e")
+        bs, be, by = tx, x1 - 26, y0 + h * 0.68
+        c.create_line(bs, by, be, by, fill=self._lit(accent, 0.2), width=4, capstyle="round")
+        if value > 0.01:
+            c.create_line(bs, by, bs + (be - bs) * min(1.0, value), by, fill=accent,
+                          width=4, capstyle="round")
+        c.create_oval(x1 - 16, hy - 4, x1 - 8, hy + 4, outline=accent, fill=col["panel"], width=1)
+        c.create_oval(x1 - 13, hy - 1, x1 - 11, hy + 1, fill=accent, outline="")
+
+    def _card_right(self, box, accent, label, valtxt, active, t, idx):
+        c, col = self.bg, self.col
+        x0, y0, x1, y1 = box
+        h = y1 - y0
+        self._rr(x0, y0, x1, y1, 10, fill=col["panel"],
+                 outline=self._lit(accent, 0.4 if active else 0.2), width=1)
+        cx_, cy_ = x0 + h * 0.5, (y0 + y1) / 2
+        r = h * 0.24
+        if active:
+            k = 0.5 + 0.5 * math.sin(t * 0.1 + idx)
+            c.create_oval(cx_ - r * 1.6, cy_ - r * 1.6, cx_ + r * 1.6, cy_ + r * 1.6,
+                          fill=self._lit(accent, 0.12 + 0.12 * k), outline="")
+        c.create_oval(cx_ - r, cy_ - r, cx_ + r, cy_ + r,
+                      fill=accent if active else self._lit(accent, 0.3), outline="")
+        tx = x0 + h * 1.0
+        c.create_text(tx, y0 + h * 0.28, text=label, fill=col["text"],
+                      font=("Consolas", 7, "bold"), anchor="w")
+        c.create_text(x1 - 12, y0 + h * 0.28, text=valtxt, fill=accent,
+                      font=("Consolas", 7, "bold"), anchor="e")
+        lit_i = (t // 6 + idx) % 5
+        for d in range(5):
+            if active:
+                f = 1.0 if d == lit_i else 0.45
+            else:
+                f = 0.15
+            dx = tx + d * 11
+            c.create_oval(dx - 2.5, y0 + h * 0.68 - 2.5, dx + 2.5, y0 + h * 0.68 + 2.5,
+                          fill=self._lit(accent, f), outline="")
+        c.create_oval(x0 - 3, cy_ - 3, x0 + 3, cy_ + 3, fill=accent, outline="")
+
+    def _draw_cards(self, L, t, acc):
+        col = self.col
+        left, right = self._card_boxes(L)
+        st = self._sys_stats()
+        link = (1.0 if self.connected else
+                0.5 + 0.4 * math.sin(t * 0.15) if self.connecting else 0.0)
+        raw = {"cpu": st["cpu"], "mem": st["mem"]}
+        for key, val in raw.items():
+            if val is not None:
+                self._disp[key] += (val / 100.0 - self._disp[key]) * 0.1
+        cpu_txt = "N/A" if st["cpu"] is None else f"{self._disp['cpu'] * 100:.0f}%"
+        mem_txt = "N/A" if st["mem"] is None else f"{self._disp['mem'] * 100:.0f}%"
+        link_txt = ("ONLINE" if self.connected else
+                    "CONNECTING" if self.connecting else "OFFLINE")
+        defs = [("CPU", cpu_txt, self._disp["cpu"] if st["cpu"] is not None else 0.0),
+                ("MEMORY", mem_txt, self._disp["mem"] if st["mem"] is not None else 0.0),
+                ("AI LINK", link_txt, link)]
+        for i, (box, (label, txt, val)) in enumerate(zip(left, defs)):
+            a = acc[i % 4]
+            if label == "AI LINK" and not self.connected and not self.connecting:
+                a = col["red"]
+            self._card_left(box, a, label, txt, val, t)
+
+        mic_on = not self.muted
+        voice_on = not self.silent_mode
+        vis_on = self.vision_mode != "STANDBY"
+        rdefs = [("MIC", "LIVE" if mic_on else "MUTED", mic_on,
+                  col["green"] if mic_on else col["mutcol"]),
+                 ("VOICE", "ON" if voice_on else "TEXT", voice_on,
+                  acc[2] if voice_on else acc[1]),
+                 ("VISION", self.vision_mode[:9], vis_on, acc[3]),
+                 ("CORE", str(self.status_text)[:9], True, acc[0])]
+        for i, (box, (label, txt, active, a)) in enumerate(zip(right, rdefs)):
+            self._card_right(box, a, label, txt, active, t, i)
+
+    # ── Dock ──────────────────────────────────────────────────────────────────
+
+    def _draw_dock(self, L, t, acc):
+        c, col = self.bg, self.col
+        cx, dh = L["cx"], L["dh"]
+        y0, y1 = L["dock_y0"], L["bottom"]
+        s = dh * 0.62
+        gap = s * 0.45
+        n = 4
+        total = n * s + (n - 1) * gap
+        pad = 16
+        self._rr(cx - total / 2 - pad, y0, cx + total / 2 + pad, y1, 12,
+                 fill=col["panel"], outline=col["dim"], width=1)
+        names = ["TERMINAL", "FILES", "THEME", "BRIEFING"]
+        actions = ["terminal", "files", "settings", "clock"]
+        hover = getattr(self, "_dock_hover", None)
+        for i in range(n):
+            bx0 = cx - total / 2 + i * (s + gap)
+            by0 = y0 + 6
+            bx1, by1 = bx0 + s, by0 + s
+            a = acc[i % 4]
+            hot = hover == i
+            self._rr(bx0, by0, bx1, by1, 8,
+                     fill=self._lit(a, 0.22 if hot else 0.08),
+                     outline=a if hot else col["dim"], width=1)
+            ix, iy, ic = (bx0 + bx1) / 2, (by0 + by1) / 2, s * 0.28
+            if i == 0:
+                c.create_text(ix, iy, text=">_", fill=a,
+                              font=("Consolas", max(8, int(s * 0.36)), "bold"))
+            elif i == 1:
+                c.create_polygon(ix - ic * 1.1, iy - ic * 0.7, ix - ic * 0.2, iy - ic * 0.7,
+                                 ix + ic * 0.1, iy - ic * 0.35, ix + ic * 1.1, iy - ic * 0.35,
+                                 ix + ic * 1.1, iy + ic * 0.8, ix - ic * 1.1, iy + ic * 0.8,
+                                 outline=a, fill="", width=2)
+            elif i == 2:
+                rot = t * (1.5 if hot else 0.4)
+                c.create_oval(ix - ic * 0.55, iy - ic * 0.55, ix + ic * 0.55, iy + ic * 0.55,
+                              outline=a, width=2)
+                for k in range(8):
+                    ang = math.radians(rot + k * 45)
+                    c.create_line(ix + ic * 0.8 * math.cos(ang), iy + ic * 0.8 * math.sin(ang),
+                                  ix + ic * 1.15 * math.cos(ang), iy + ic * 1.15 * math.sin(ang),
+                                  fill=a, width=3)
+            else:
+                c.create_oval(ix - ic, iy - ic, ix + ic, iy + ic, outline=a, width=2)
+                lt = time.localtime()
+                ha = math.radians((lt.tm_hour % 12 + lt.tm_min / 60) * 30 - 90)
+                ma = math.radians(lt.tm_min * 6 - 90)
+                c.create_line(ix, iy, ix + ic * 0.5 * math.cos(ha), iy + ic * 0.5 * math.sin(ha),
+                              fill=a, width=2)
+                c.create_line(ix, iy, ix + ic * 0.82 * math.cos(ma), iy + ic * 0.82 * math.sin(ma),
+                              fill=a, width=1)
+            dy = by1 + (y1 - by1) / 2
+            c.create_oval(ix - 2, dy - 2, ix + 2, dy + 2,
+                          fill=self._lit(a, 1.0 if hot else 0.7), outline="")
+            self._dock_rects.append((bx0, by0, bx1, by1, actions[i]))
+            if hot:
+                c.create_text(cx, y0 - 9, text=names[i], fill=a,
+                              font=("Consolas", 8, "bold"))
+
+    def _dock_hit(self, x, y):
+        for i, (x0, y0, x1, y1, _a) in enumerate(getattr(self, "_dock_rects", [])):
+            if x0 <= x <= x1 and y0 <= y <= y1:
+                return i
+        return None
+
+    def _on_stage_motion(self, event):
+        i = self._dock_hit(event.x / self.S, event.y / self.S)
+        if i != self._dock_hover:
+            self._dock_hover = i
+            self.bg.configure(cursor="hand2" if i is not None else "")
+
+    def _on_stage_leave(self, event=None):
+        self._dock_hover = None
+        self.bg.configure(cursor="")
+
+    def _on_stage_click(self, event):
+        i = self._dock_hit(event.x / self.S, event.y / self.S)
+        if i is None:
+            return
+        action = self._dock_rects[i][4]
+        if action == "terminal":
+            self._input_text.focus_set()
+        elif action == "settings":
+            self.cycle_theme()
+        elif action == "files":
+            self._send_stage_command("open my recent files")
+        elif action == "clock":
+            self._send_stage_command("give me my daily briefing")
+
+    def _send_stage_command(self, text):
+        self.write_log("SYS: Dock → " + text)
+        if self.on_text_command:
+            threading.Thread(target=self.on_text_command, args=(text,), daemon=True).start()
+
+    # ── Status line + header / footer ─────────────────────────────────────────
+
+    def _draw_status(self, L, t):
+        c, col = self.bg, self.col
+        cx = L["cx"]
+        sy = L["py"] + L["R"] * 0.44 + 24
+        if self.muted:
+            stat, sc = "⊘ MUTED", col["mutcol"]
+        elif self.speaking:
+            stat, sc = "● SPEAKING", col["acc"]
+        elif self._state == "THINKING":
+            stat, sc = ("◈" if self.status_blink else "◇") + " THINKING", col["acc2"]
+        elif self._state == "PROCESSING":
+            stat, sc = ("▷" if self.status_blink else "▶") + " PROCESSING", col["acc2"]
+        elif self._state == "LISTENING":
+            stat, sc = ("●" if self.status_blink else "○") + " LISTENING", col["green"]
+        else:
+            stat, sc = ("●" if self.status_blink else "○") + f" {self.status_text}", col["pri"]
+        c.create_text(cx, sy, text=stat, fill=sc, font=("Segoe UI", 11, "bold"))
+
+        N, BH, bw = 24, 12, 6
+        wx0, wy = cx - N * bw / 2, sy + 10
+        for i in range(N):
+            if self.muted:
+                hb, wcol = 2, col["mutcol"]
+            elif self.speaking:
+                hb = random.randint(2, BH)
+                wcol = col["pri"] if hb > BH * 0.6 else col["mid"]
+            else:
+                hb, wcol = int(3 + 2 * math.sin(t * 0.08 + i * 0.55)), col["dim"]
+            bx = wx0 + i * bw
+            c.create_rectangle(bx, wy + BH - hb, bx + bw - 1, wy + BH, fill=wcol, outline="")
+
+    def _draw_chrome(self, t):
+        c, col, B = self.bg, self.col, self.brand
+        W, H = self.W, self.H
         HDR = 78
         c.create_rectangle(0, 0, W, HDR, fill=col["hdr"], outline="")
         c.create_line(0, HDR, W, HDR, fill=col["mid"], width=1)
-        c.create_text(W // 2, 16, text=SYSTEM_NAME,
-                      fill=col["pri"], font=("Segoe UI", 16, "bold"))
-        c.create_text(W // 2, 36, text="Just A Rather Very Intelligent System",
-                      fill=col["mid"], font=("Segoe UI", 8))
-        c.create_text(16, 16, text=MODEL_BADGE,
-                      fill=col["dim"], font=("Segoe UI", 8), anchor="w")
-        c.create_text(W - 16, 18, text=time.strftime("%H:%M:%S"),
-                      fill=col["pri"], font=("Segoe UI", 12, "bold"), anchor="e")
+        c.create_rectangle(0, HDR - 2, min(W, 260), HDR, fill=col["pri"], outline="")
 
-        # Connection indicator (right side of header)
-        if self.connecting:
-            conn_txt, conn_col = "◌ CONNECTING", col["acc2"]
-        elif self.connected:
-            conn_txt, conn_col = "● ONLINE", col["green"]
+        # brand block: logo (or emblem) + company + division + persona
+        x = 16
+        if self._logo is not None:
+            if B.get("logo_plate", True):
+                self._rr(x - 5, 7, x + self._logo_w + 5, 55, 8, fill="#F4F4F4", outline="")
+            c.create_image(x, 11, image=self._logo, anchor="nw")
+            x += self._logo_w + 16
         else:
-            conn_txt, conn_col = "○ OFFLINE", col["red"]
-        c.create_text(W - 16, 40, text=conn_txt, fill=conn_col,
-                      font=("Segoe UI", 8, "bold"), anchor="e")
-
-        # Persona badges (left side of header)
-        badge = (f"◈ {self.persona_mode.upper()} · "
-                 f"{self.persona_mood.upper()} · {self.persona_voice}")
-        c.create_text(16, 40, text=badge, fill=col["acc2"],
+            c.create_polygon(self._hexpts(x + 18, 31, 18, 0), outline=col["pri"],
+                             fill=self._lit(col["pri"], 0.16), width=2)
+            c.create_polygon(self._hexpts(x + 18, 31, 9, 0), fill=col["pri"], outline="")
+            x += 48
+        c.create_text(x, 22, text=B["company"], fill=col["text"],
+                      font=("Segoe UI", 13, "bold"), anchor="w")
+        if W >= 940:
+            c.create_text(x, 41, text=B["division"], fill=col["mid"],
+                          font=("Segoe UI", 8), anchor="w")
+        badge = (f"\u25c8 {self.persona_mode.upper()} \u00b7 "
+                 f"{self.persona_mood.upper()} \u00b7 {self.persona_voice}")
+        c.create_text(x, 60, text=badge, fill=col["acc2"],
                       font=("Segoe UI", 8, "bold"), anchor="w")
 
-        # ── Status indicator ──────────────────────────────────────────────────
-        sy = FCY + FW // 2 + 45
+        # product title
+        c.create_text(W // 2, 26, text=B["product"], fill=col["pri"],
+                      font=("Segoe UI", 18, "bold"))
+        c.create_text(W // 2, 48, text=B["tagline"], fill=col["mid"],
+                      font=("Segoe UI", 8))
 
-        if self.muted:
-            stat = "⊘ MUTED"
-            sc   = col["mutcol"]
-        elif self.speaking:
-            stat = "● SPEAKING"
-            sc   = col["acc"]
-        elif self._state == "THINKING":
-            sym  = "◈" if self.status_blink else "◇"
-            stat = f"{sym} THINKING"
-            sc   = col["acc2"]
-        elif self._state == "PROCESSING":
-            sym  = "▷" if self.status_blink else "▶"
-            stat = f"{sym} PROCESSING"
-            sc   = col["acc2"]
-        elif self._state == "LISTENING":
-            sym  = "●" if self.status_blink else "○"
-            stat = f"{sym} LISTENING"
-            sc   = col["green"]
+        c.create_text(W - 16, 20, text=time.strftime("%H:%M:%S"), fill=col["pri"],
+                      font=("Segoe UI", 12, "bold"), anchor="e")
+        c.create_text(W - 16, 40, text=time.strftime("%a %d %b %Y").upper(), fill=col["mid"],
+                      font=("Segoe UI", 8), anchor="e")
+        if self.connecting:
+            conn_txt, conn_col = "\u25cc CONNECTING", col["acc"]
+        elif self.connected:
+            conn_txt, conn_col = "\u25cf ONLINE", col["green"]
         else:
-            sym  = "●" if self.status_blink else "○"
-            stat = f"{sym} {self.status_text}"
-            sc   = col["pri"]
+            conn_txt, conn_col = "\u25cb OFFLINE", col["red"]
+        c.create_text(W - 16, 60, text=conn_txt, fill=conn_col,
+                      font=("Segoe UI", 8, "bold"), anchor="e")
 
-        c.create_text(W // 2, sy, text=stat,
-                      fill=sc, font=("Segoe UI", 11, "bold"))
-
-        # ── Sound wave ────────────────────────────────────────────────────────
-        wy = sy + 22
-        N  = 32
-        BH = 18
-        bw = 8
-        total_w = N * bw
-        wx0 = (W - total_w) // 2
-        for i in range(N):
-            if self.muted:
-                hb  = 2
-                wcol = col["mutcol"]
-            elif self.speaking:
-                hb  = random.randint(3, BH)
-                wcol = col["pri"] if hb > BH * 0.6 else col["mid"]
-            else:
-                hb  = int(3 + 2 * math.sin(t * 0.08 + i * 0.55))
-                wcol = col["dim"]
-            bx = wx0 + i * bw
-            c.create_rectangle(bx, wy + BH - hb, bx + bw - 1, wy + BH,
-                               fill=wcol, outline="")
-
-        # ── Footer / status bar ───────────────────────────────────────────────
+        # footer
         c.create_rectangle(0, H - 38, W, H, fill=col["hdr"], outline="")
         c.create_line(0, H - 38, W, H - 38, fill=col["dim"], width=1)
-
-        # Last system event (alerts, reminders) — center-left
         if self.last_event:
             ev = self.last_event if len(self.last_event) <= 72 else self.last_event[:69] + "..."
             c.create_text(W // 2, H - 26, text=ev, fill=col["mid"],
                           font=("Segoe UI", 8), anchor="center")
-
-        # Battery + hints — right side
+        if W >= 860:
+            c.create_text(W // 2, H - 11, text=B["footer"], fill=col["dim"],
+                          font=("Segoe UI", 7), anchor="center")
         batt = self._battery_text()
-        hints = "  ".join(x for x in [batt, "[F4] MUTE", "[F5] THEME"] if x)
+        hints = "  ".join(x_ for x_ in [batt, "[F4] MUTE", "[F5] THEME: " + THEMES[self._theme]["name"],
+                                        "[F6] TEXT-ONLY", "[F11] FULLSCREEN"] if x_)
         c.create_text(W - 16, H - 14, text=hints, fill=col["dim"],
                       font=("Segoe UI", 8), anchor="e")
-
-        c.create_text(16, H - 14, text=f"GHOST · {THEMES[self._theme]['name']}",
-                      fill=col["dim"], font=("Segoe UI", 8), anchor="w")
 
     # ── Log ───────────────────────────────────────────────────────────────────
 
     def write_log(self, text: str):
         self._safe_ui(self._write_log, text)
 
+    def _brand_text(self, text: str) -> str:
+        """Show the configured product name wherever main.py says 'Kaizumi'."""
+        import re
+        name = str(self.brand.get("product") or "GHOST")
+        return re.sub(r"kaizumi", name, text, flags=re.I)
+
     def _write_log(self, text: str):
+        text = self._brand_text(text)
         self.typing_queue.append(text)
         stripped = text
         for prefix in ("[Guardian]", "[Monitor]", "[Email]", "⏰", "SYS:"):
@@ -1996,15 +2895,29 @@ class GHOSTUI:
         text = self.typing_queue.popleft()
         tl   = text.lower()
         if tl.startswith("you:"):
-            tag = "you"
-        elif tl.startswith("ghost:") or tl.startswith("ai:"):
-            tag = "ai"
-        elif tl.startswith("err:") or "error" in tl or "failed" in tl:
-            tag = "err"
+            kind, body = "you", text[4:].strip()
+        elif tl.startswith("ghost:"):
+            kind, body = "ai", text[6:].strip()
+        elif tl.startswith("ai:"):
+            kind, body = "ai", text[3:].strip()
+        elif tl.startswith("err:"):
+            kind, body = "err", text[4:].strip()
+        elif "error" in tl or "failed" in tl:
+            kind, body = "err", text
+        elif tl.startswith("sys:"):
+            kind, body = "sys", text[4:].strip()
         else:
-            tag = "sys"
+            kind, body = "sys", text
+        for _pre in ("sys:", "err:"):
+            if body.lower().startswith(_pre):
+                body = body[len(_pre):].strip()
+        label = {"you": "YOU", "ai": str(self.brand.get("product") or "GHOST").upper()[:8],
+                 "sys": "SYS", "err": "ERR"}[kind]
         self.log_text.configure(state="normal")
-        self._type_char(text, 0, tag)
+        self.log_text.insert(tk.END, time.strftime("%H:%M") + "  ", "ts")
+        self.log_text.insert(tk.END, label, "lbl_" + kind)
+        self.log_text.insert(tk.END, "\t", kind)
+        self._type_char(body, 0, kind)
 
     def _type_char(self, text, i, tag):
         if i < len(text):
@@ -2050,28 +2963,28 @@ class GHOSTUI:
     def _show_setup_ui(self):
         self.setup_frame = tk.Frame(
             self.root, bg=THEMES[self._theme]["hdr"],
-            highlightbackground=THEMES[self._theme]["pri"], highlightthickness=1
+            highlightbackground=THEMES[self._theme]["pri"], highlightthickness=px(1)
         )
-        self.setup_frame.place(relx=0.5, rely=0.5, anchor="center")
+        self._pl(self.setup_frame, relx=0.5, rely=0.5, anchor="center")
 
         tk.Label(self.setup_frame, text="◈  INITIALISATION REQUIRED",
                  fg=THEMES[self._theme]["pri"], bg=THEMES[self._theme]["hdr"],
-                 font=("Segoe UI", 13, "bold")).pack(pady=(18, 4))
+                 font=("Segoe UI", 13, "bold")).pack(pady=px((18, 4)))
         tk.Label(self.setup_frame,
                  text="Enter your Gemini API key to boot GHOST.",
                  fg=THEMES[self._theme]["mid"], bg=THEMES[self._theme]["hdr"],
-                 font=("Segoe UI", 9)).pack(pady=(0, 10))
+                 font=("Segoe UI", 9)).pack(pady=px((0, 10)))
 
         tk.Label(self.setup_frame, text="GEMINI API KEY",
                  fg=THEMES[self._theme]["dim"], bg=THEMES[self._theme]["hdr"],
-                 font=("Segoe UI", 9)).pack(pady=(8, 2))
+                 font=("Segoe UI", 9)).pack(pady=px((8, 2)))
         self.gemini_entry = tk.Entry(
             self.setup_frame, width=52, fg=THEMES[self._theme]["text"],
             bg=THEMES[self._theme]["input"],
             insertbackground=THEMES[self._theme]["text"], borderwidth=0,
             font=("Segoe UI", 10), show="*"
         )
-        self.gemini_entry.pack(pady=(0, 4), ipady=7)
+        self.gemini_entry.pack(pady=px((0, 4)), ipady=px(7))
         self.gemini_entry.bind("<Return>", lambda event: self._save_api_keys())
 
         tk.Button(
@@ -2079,9 +2992,9 @@ class GHOSTUI:
             command=self._save_api_keys, bg=THEMES[self._theme]["bg"],
             fg=THEMES[self._theme]["pri"],
             activebackground=THEMES[self._theme]["mid"], font=("Segoe UI", 10),
-            borderwidth=0, pady=8, cursor="hand2",
+            borderwidth=0, pady=px(8), cursor="hand2",
             activeforeground=THEMES[self._theme]["text"]
-        ).pack(pady=(12, 18), padx=18, fill="x")
+        ).pack(pady=px((12, 18)), padx=px(18), fill="x")
 
     def _save_api_keys(self):
         gemini = self.gemini_entry.get().strip()
@@ -2094,3 +3007,7 @@ class GHOSTUI:
         self._api_key_ready = True
         self.set_state("LISTENING")
         self.write_log("SYS: Systems initialised. GHOST online.")
+
+
+# main.py imports the UI under this name
+KaizumiUI = GHOSTUI
