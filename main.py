@@ -37,6 +37,14 @@ from memory.memory_manager import (
     load_memory, update_memory, format_memory_for_prompt,
     should_extract_memory, extract_memory
 )
+from core.preferences import (
+    VOICES,
+    VOICE_NAMES,
+    _get_style_from_memory,
+    _get_voice_from_memory,
+    _normalize_mode,
+    _normalize_voice,
+)
 from agent.resilience import ToolResult, run_sync_tool
 from agent.loop_guard import LoopGuard
 
@@ -154,61 +162,6 @@ def _ensure_core_deps():
     raise SystemExit(msg)
 
 
-def _normalize_mode(text) -> str:
-    """Map user wording to a canonical mode id, or '' if unknown."""
-    m = (str(text or "").strip().lower()
-         .replace("-", " ").replace("_", " "))
-    aliases = {
-        "normal": "normal", "default": "normal", "standard": "normal",
-        "regular": "normal", "profonal": "normal", "professional": "normal",
-        "romantic": "girlfriend", "romantic girlfriend": "girlfriend",
-        "girlfriend": "girlfriend", "girl": "girlfriend",
-        "crazy friend": "crazy_friend", "crazy_friend": "crazy_friend",
-        "crazy": "crazy_friend", "funny friend": "crazy_friend",
-        "friend": "friend", "friendly": "friend",
-        "butler": "butler", "batman's butler": "butler", "butler mode": "butler",
-        "alfred": "butler", "servant": "butler",
-        "casual": "casual", "chill": "casual",
-    }
-    m = aliases.get(m, m)
-    valid = {"normal", "girlfriend", "crazy_friend", "butler", "friend", "casual"}
-    return m if m in valid else ""
-
-
-VOICES = {
-    "Achernar":      "mayin (Soft)",
-    "Achird":        "do'stona (Friendly)",
-    "Algenib":       "bo'g'iq (Gravelly)",
-    "Algieba":       "silliq (Smooth)",
-    "Alnilam":       "qat'iy (Firm)",
-    "Aoede":         "engil ayol (Breezy)",
-    "Autonoe":       "yorqin (Bright)",
-    "Callirrhoe":    "erkin (Easy-going)",
-    "Charon":        "chuqur erkak (Informative)",
-    "Despina":       "silliq (Smooth)",
-    "Enceladus":     "nafasli (Breathy)",
-    "Erinome":       "aniq (Clear)",
-    "Fenrir":        "qattiq erkak (Excitable)",
-    "Gacrux":        "etuk (Mature)",
-    "Iapetus":       "aniq (Clear)",
-    "Kore":          "jonli ayol (Firm)",
-    "Laomedeia":     "quvnoq (Upbeat)",
-    "Leda":          "yoshlik (Youthful)",
-    "Orus":          "qat'iy erkak (Firm)",
-    "Puck":          "quvnoq erkak (Upbeat)",
-    "Pulcherrima":   "dadil (Forward)",
-    "Rasalgethi":    "ma'lumotli (Informative)",
-    "Sadachbia":     "jonli (Lively)",
-    "Sadaltager":    "bilimdon (Knowledgeable)",
-    "Schedar":       "tinch (Even)",
-    "Sulafat":       "iliq (Warm)",
-    "Umbriel":       "erkin (Easy-going)",
-    "Vindemiatrix":  "muloyim (Gentle)",
-    "Zephyr":        "yorqin ayol (Bright)",
-    "Zubenelgenubi": "oddiy (Casual)",
-}
-VOICE_NAMES = list(VOICES.keys())
-
 TG_VOICE_KEYBOARD = {
     "inline_keyboard": [
         [
@@ -218,57 +171,6 @@ TG_VOICE_KEYBOARD = {
         for i in range(0, len(VOICE_NAMES), 2)
     ]
 }
-
-
-def _normalize_voice(text) -> str:
-    """Map user wording to a canonical Gemini voice name, or '' if unknown."""
-    v = (str(text or "").strip().lower()
-         .replace("-", " ").replace("_", " "))
-    aliases = {
-        "default": "Aoede", "auto": "Aoede", "standart": "Aoede",
-        "normal": "Aoede", "classic": "Aoede",
-        "aoede": "Aoede", "charon": "Charon", "fenrir": "Fenrir",
-        "kore": "Kore", "puck": "Puck", "zephyr": "Zephyr",
-        "ayol": "Aoede", "erkak": "Charon",
-    }
-    v = aliases.get(v, v.title())
-    return v if v in VOICE_NAMES else ""
-
-
-def _get_style_from_memory(memory: dict | None) -> tuple[str, str]:
-    """
-    Returns (mode, mood).
-    Stored under preferences.assistant_mode / preferences.assistant_mood.
-    """
-    if not memory:
-        return ("normal", "calm")
-
-    prefs = memory.get("preferences", {}) if isinstance(memory, dict) else {}
-
-    mode_entry = prefs.get("assistant_mode")
-    mood_entry = prefs.get("assistant_mood")
-
-    mode = mode_entry.get("value") if isinstance(mode_entry, dict) else mode_entry
-    mood = mood_entry.get("value") if isinstance(mood_entry, dict) else mood_entry
-
-    mode = _normalize_mode(mode) or "normal"
-    mood = (str(mood or "").strip().lower() or "calm")
-
-    valid_moods = {"calm", "playful", "romantic", "strict"}
-
-    if mood not in valid_moods:
-        mood = "calm"
-
-    return (mode, mood)
-
-
-def _get_voice_from_memory(memory: dict | None) -> str:
-    """Returns the saved Gemini voice name (defaults to Aoede)."""
-    prefs = memory.get("preferences", {}) if isinstance(memory, dict) else {}
-    entry = prefs.get("assistant_voice")
-    voice = entry.get("value") if isinstance(entry, dict) else entry
-    voice = _normalize_voice(voice)
-    return voice or "Aoede"
 
 
 def _get_api_key() -> str:
