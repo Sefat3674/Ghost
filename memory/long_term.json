@@ -1,12 +1,12 @@
 {
   "identity": {
     "name": {
-      "value": "Sefat",
-      "updated": "2026-11-24"
+      "value": "Sefat Ahmed",
+      "updated": "2026-11-25"
     },
     "email": {
-      "value": "Sifat Ahmed 3674@gmail.com",
-      "updated": "2026-11-23"
+      "value": "sefatabmed367@gmail.com",
+      "updated": "2026-11-25"
     }
   },
   "preferences": {
@@ -212,6 +212,14 @@
     },
     "conversation_2026-11-25_11-09": {
       "value": "User: Hello.\nGHOST: Hello. How can I assist you today?\nUser: আচ্ছা, আমি Outlook এ একটা মেইল পাঠাইতে চাই।\nGHOST: ঠিক আছে, কাকে মেইলটি পাঠাতে চান, মেইলের বিষয় এবং মূল বার্তাটি আমাকে বলুন।\nUser: ऑलरेडी ड्राफ्टेड तोमर सेवंथ 367@gmail.com है। घोस्ट एआई असिस्टेंट प्रोजेक्ट अपडेट एंड आउटलुक v4 इंटीग्रेशन नाम है। एक ड्राफ्ट करा है।\nGHOST: \nUser: Hello.\nGHOST: এখানে ড্রাফটটির বিস্তারিত দেওয়া হলো: **To:** s",
+      "updated": "2026-11-25"
+    },
+    "conversation_2026-11-25_11-14": {
+      "value": "Best regards\n\nআপনি কি ড্রাফটটি পাঠাতে চান?\nUser: Harmi draft pathaicha\nGHOST: আমি কি নির্বাচিত ড্রাফটটি পাঠাতে পারি?\nUser: Yes, please send it.\nGHOST: ড্রাফটটি পাঠানোর জন্য আপনার মৌখিক অনুমতির প্রয়োজন। আমি কি ড্রাফটটি পাঠাতে পারি?\nUser: Yes.\nGHOST: \nUser: हां, भेजो।\nGHOST: দুঃখিত, ড্রাফটটি পাঠানোর সময় কোন সমস্যা হয়েছে। আমি কি ড্রাফটটি আবার পাঠানোর চেষ্টা করতে পারি?\nUser: App pathao\nGHOST: \nUser: ",
+      "updated": "2026-11-25"
+    },
+    "conversation_2026-11-25_11-19": {
+      "value": "User: Hmm, hello.\nGHOST: Hello. How can I assist you today?\nUser: अच्छा, तुम ही मेरे लिए एक मेल भेजो।\nGHOST: কার কাছে মেইলটি পাঠাতে হবে এবং বিষয় ও মূল বার্তাটি কী?\nUser: asifahmed3674@gmail.com বিষয় হচ্ছে গ্রিটিংস এন্ড মূল বার্তা হচ্ছে গুড নিউজ।\nGHOST: আসিফ আহমেদকে \"Greetings\" বিষয়ে \"Good News\" বার্তাটি পাঠানোর খসড়াটি তৈরি করছি। আমি কি এটি পাঠিয়ে দেব?\nUser: Assez fort maintenant, c'est fatiguant.",
       "updated": "2026-11-25"
     }
   }
