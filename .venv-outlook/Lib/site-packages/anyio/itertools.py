@@ -438,9 +438,9 @@ async def islice(
     if step <= 0:
         raise ValueError(step_message)
 
-    # Like itertools.islice(), skip the first "start" items even if "stop" is lower
-    if stop is not None:
-        stop = max(start, stop)
+    if stop == 0 or start == stop:
+        await checkpoint()
+        return
 
     iterator = _iterate(iterable)
     index = 0
@@ -509,9 +509,6 @@ async def product(
     repeat = operator.index(repeat)
     if repeat < 0:
         raise ValueError("repeat argument cannot be negative")
-
-    if repeat == 0:
-        iterables = ()
 
     pools: list[tuple[T, ...]] = []
     for iterable in iterables:

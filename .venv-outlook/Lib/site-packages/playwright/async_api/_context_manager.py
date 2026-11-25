@@ -12,20 +12,38 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Optional
+import asyncio
+from typing import Any
 
-from playwright._impl.out_of_process import PlaywrightClient, start
+from playwright._impl._connection import Connection
+from playwright._impl._object_factory import create_remote_object
+from playwright._impl._transport import PipeTransport
 from playwright.async_api._generated import Playwright as AsyncPlaywright
 
 
 class PlaywrightContextManager:
     def __init__(self) -> None:
-        self._client: Optional[PlaywrightClient] = None
+        self._connection: Connection
         self._exit_was_called = False
 
     async def __aenter__(self) -> AsyncPlaywright:
-        impl, self._client = await start()
-        playwright = AsyncPlaywright(impl)
+        loop = asyncio.get_running_loop()
+        self._connection = Connection(
+            None,
+            create_remote_object,
+            PipeTransport(loop),
+            loop,
+        )
+        loop.create_task(self._connection.run())
+        playwright_future = self._connection.playwright_future
+
+        done, _ = await asyncio.wait(
+            {self._connection._transport.on_error_future, playwright_future},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if not playwright_future.done():
+            playwright_future.cancel()
+        playwright = AsyncPlaywright(next(iter(done)).result())
         playwright.stop = self.__aexit__  # type: ignore
         return playwright
 
@@ -36,5 +54,4 @@ class PlaywrightContextManager:
         if self._exit_was_called:
             return
         self._exit_was_called = True
-        if self._client:
-            await self._client.stop()
+        await self._connection.stop_async()

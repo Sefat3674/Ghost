@@ -14,7 +14,6 @@ from typing import IO, Any
 
 from .. import (
     BrokenResourceError,
-    CancelScope,
     ClosedResourceError,
     EndOfStream,
     TypedAttributeSet,
@@ -22,7 +21,6 @@ from .. import (
     typed_attribute,
 )
 from ..abc import ByteReceiveStream, ByteSendStream
-from ..lowlevel import checkpoint_if_cancelled
 
 
 class FileStreamAttribute(TypedAttributeSet):
@@ -39,10 +37,7 @@ class _BaseFileStream:
         self._file = file
 
     async def aclose(self) -> None:
-        with CancelScope(shield=True):
-            await to_thread.run_sync(self._file.close)
-
-        await checkpoint_if_cancelled()
+        await to_thread.run_sync(self._file.close)
 
     @property
     def extra_attributes(self) -> Mapping[Any, Callable[[], Any]]:

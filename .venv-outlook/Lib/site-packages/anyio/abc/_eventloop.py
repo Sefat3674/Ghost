@@ -20,7 +20,6 @@ from typing import (
     IO,
     TYPE_CHECKING,
     Any,
-    Literal,
     TypeAlias,
     TypeVar,
     overload,
@@ -237,16 +236,6 @@ class AsyncBackend(metaclass=ABCMeta):
 
     @classmethod
     @abstractmethod
-    def run_sync_soon(
-        cls,
-        func: Callable[[Unpack[PosArgsT]], object],
-        args: tuple[Unpack[PosArgsT]],
-        token: object,
-    ) -> None:
-        """Schedule a synchronous callable in an event loop without waiting."""
-
-    @classmethod
-    @abstractmethod
     async def open_process(
         cls,
         command: StrOrBytesPath | Sequence[StrOrBytesPath],
@@ -282,11 +271,7 @@ class AsyncBackend(metaclass=ABCMeta):
 
     @classmethod
     @abstractmethod
-    async def connect_unix(
-        cls,
-        path: str | bytes,
-        kind: Literal[SocketKind.SOCK_STREAM, SocketKind.SOCK_SEQPACKET],
-    ) -> UNIXSocketStream:
+    async def connect_unix(cls, path: str | bytes) -> UNIXSocketStream:
         pass
 
     @classmethod

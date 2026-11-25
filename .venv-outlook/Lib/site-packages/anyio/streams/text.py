@@ -13,7 +13,6 @@ from collections.abc import Callable, Mapping
 from dataclasses import InitVar, dataclass, field
 from typing import Any
 
-from .._core._exceptions import EndOfStream
 from ..abc import (
     AnyByteReceiveStream,
     AnyByteSendStream,
@@ -60,19 +59,8 @@ class TextReceiveStream(ObjectReceiveStream[str]):
 
     async def receive(self) -> str:
         while True:
-            try:
-                chunk = await self.transport_stream.receive()
-            except EndOfStream:
-                try:
-                    decoded = self._decoder.decode(b"", final=True)
-                finally:
-                    self._decoder.reset()
-
-                if not decoded:
-                    raise
-            else:
-                decoded = self._decoder.decode(chunk)
-
+            chunk = await self.transport_stream.receive()
+            decoded = self._decoder.decode(chunk)
             if decoded:
                 return decoded
 
@@ -103,14 +91,13 @@ class TextSendStream(ObjectSendStream[str]):
     transport_stream: AnyByteSendStream
     encoding: InitVar[str] = "utf-8"
     errors: str = "strict"
-    _encoder: codecs.IncrementalEncoder = field(init=False)
+    _encoder: Callable[..., tuple[bytes, int]] = field(init=False)
 
     def __post_init__(self, encoding: str) -> None:
-        encoder_class = codecs.getincrementalencoder(encoding)
-        self._encoder = encoder_class(errors=self.errors)
+        self._encoder = codecs.getencoder(encoding)
 
     async def send(self, item: str) -> None:
-        encoded = self._encoder.encode(item)
+        encoded = self._encoder(item, self.errors)[0]
         await self.transport_stream.send(encoded)
 
     async def aclose(self) -> None:

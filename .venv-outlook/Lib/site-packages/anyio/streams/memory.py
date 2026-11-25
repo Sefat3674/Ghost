@@ -80,7 +80,6 @@ class _MemoryObjectStreamState(Generic[T_Item]):
 class MemoryObjectReceiveStream(ObjectReceiveStream[T_co], Generic[T_co]):
     _state: _MemoryObjectStreamState[T_co]
     _closed: bool = field(init=False, default=False)
-    _waiters: set[Event] | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         self._state.open_receive_channels += 1
@@ -118,12 +117,8 @@ class MemoryObjectReceiveStream(ObjectReceiveStream[T_co], Generic[T_co]):
         try:
             return self.receive_nowait()
         except WouldBlock:
-            if self._waiters is None:
-                self._waiters = set[Event]()
-
             # Add ourselves in the queue
             receive_event = Event()
-            self._waiters.add(receive_event)
             receiver = _MemoryObjectItemReceiver[T_co]()
             self._state.waiting_receivers[receive_event] = receiver
 
@@ -131,16 +126,11 @@ class MemoryObjectReceiveStream(ObjectReceiveStream[T_co], Generic[T_co]):
                 await receive_event.wait()
             finally:
                 self._state.waiting_receivers.pop(receive_event, None)
-                if self._waiters is not None:
-                    self._waiters.remove(receive_event)
 
             try:
                 return receiver.item
             except AttributeError:
-                if self._closed:
-                    raise ClosedResourceError from None
-                else:
-                    raise EndOfStream from None
+                raise EndOfStream from None
 
     def clone(self) -> MemoryObjectReceiveStream[T_co]:
         """
@@ -172,13 +162,6 @@ class MemoryObjectReceiveStream(ObjectReceiveStream[T_co], Generic[T_co]):
                 send_events = list(self._state.waiting_senders.keys())
                 for event in send_events:
                     event.set()
-
-            if self._waiters is not None:
-                for event in self._waiters:
-                    self._state.waiting_receivers.pop(event, None)
-                    event.set()
-
-                self._waiters = None
 
     async def aclose(self) -> None:
         self.close()
@@ -216,7 +199,6 @@ class MemoryObjectReceiveStream(ObjectReceiveStream[T_co], Generic[T_co]):
 class MemoryObjectSendStream(ObjectSendStream[T_contra], Generic[T_contra]):
     _state: _MemoryObjectStreamState[T_contra]
     _closed: bool = field(init=False, default=False)
-    _waiters: set[Event] | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         self._state.open_send_channels += 1
@@ -267,26 +249,18 @@ class MemoryObjectSendStream(ObjectSendStream[T_contra], Generic[T_contra]):
         try:
             self.send_nowait(item)
         except WouldBlock:
-            if self._waiters is None:
-                self._waiters = set[Event]()
-
             # Wait until there's someone on the receiving end
             send_event = Event()
-            self._waiters.add(send_event)
             self._state.waiting_senders[send_event] = item
             try:
                 await send_event.wait()
-            finally:
-                if item_not_consumed := send_event in self._state.waiting_senders:
-                    del self._state.waiting_senders[send_event]
+            except BaseException:
+                self._state.waiting_senders.pop(send_event, None)
+                raise
 
-                withdrawn = self._closed and send_event in self._waiters
-                self._waiters.discard(send_event)
-
-            if item_not_consumed:
+            if send_event in self._state.waiting_senders:
+                del self._state.waiting_senders[send_event]
                 raise BrokenResourceError from None
-            elif withdrawn:
-                raise ClosedResourceError from None
 
     def clone(self) -> MemoryObjectSendStream[T_contra]:
         """
@@ -319,19 +293,6 @@ class MemoryObjectSendStream(ObjectSendStream[T_contra], Generic[T_contra]):
                 self._state.waiting_receivers.clear()
                 for event in receive_events:
                     event.set()
-
-            if self._waiters is not None:
-                withdrawn = set[Event]()
-                for event in self._waiters:
-                    if event in self._state.waiting_senders:
-                        del self._state.waiting_senders[event]
-                        withdrawn.add(event)
-
-                    event.set()
-
-                # An event remaining on this set signals that its item was never
-                # delivered, and send() will raise ClosedResourceError
-                self._waiters = withdrawn
 
     async def aclose(self) -> None:
         self.close()
