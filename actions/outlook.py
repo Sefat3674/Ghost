@@ -1869,11 +1869,20 @@ def _compose_fields(p):
     cc = _valid_addresses(p.get("cc"), "Cc")
     bcc = _valid_addresses(p.get("bcc"), "Bcc")
 
+    subject = p.get("subject", "")
+    body = p.get("body", "")
+
+    if not isinstance(subject, str):
+        raise _Stop("Invalid 'subject' value. Subject must be a string.")
+
+    if not isinstance(body, str):
+        raise _Stop("Invalid 'body' value. Body must be a string.")
+
     html = p.get("html", False)
     if not isinstance(html, bool):
         raise _Stop("Invalid 'html' value. Use true or false.")
 
-    return to, cc, bcc, _text(p, "subject"), str(p.get("body") or ""), html
+    return to, cc, bcc, subject.strip(), body, html
 
 
 def _h_create_draft(ctx, p):

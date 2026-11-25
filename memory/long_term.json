@@ -51,6 +51,10 @@
     "planers_and_group": {
       "value": "Working on Planers & Group email",
       "updated": "2026-11-23"
+    },
+    "ghost_ai_assistant": {
+      "value": "Working on project update and outlook v4 integration, draft email saved to tomarseventh367@gmail.com",
+      "updated": "2026-11-25"
     }
   },
   "relationships": {
@@ -205,6 +209,10 @@
     "conversation_2026-11-24_01-19": {
       "value": "User: \nGHOST: I found one message in your Inbox: Subject: URGENT: Project Review Required – Deadline Test Sender: sefat ahmed akkhor Received: 2026-11-16 04:21 31 AM\nUser: \nGHOST: I have completed the requested action. **Tool Name:** `personal_outlook` with `outlook_list_inbox`\n**Arguments Used:** `count: 5`, `concise: true`\n\nThe tool returned **1** message.\n**Pagination Information:** `has_more` ",
       "updated": "2026-11-24"
+    },
+    "conversation_2026-11-25_11-09": {
+      "value": "User: Hello.\nGHOST: Hello. How can I assist you today?\nUser: আচ্ছা, আমি Outlook এ একটা মেইল পাঠাইতে চাই।\nGHOST: ঠিক আছে, কাকে মেইলটি পাঠাতে চান, মেইলের বিষয় এবং মূল বার্তাটি আমাকে বলুন।\nUser: ऑलरेडी ड्राफ्टेड तोमर सेवंथ 367@gmail.com है। घोस्ट एआई असिस्टेंट प्रोजेक्ट अपडेट एंड आउटलुक v4 इंटीग्रेशन नाम है। एक ड्राफ्ट करा है।\nGHOST: \nUser: Hello.\nGHOST: এখানে ড্রাফটটির বিস্তারিত দেওয়া হলো: **To:** s",
+      "updated": "2026-11-25"
     }
   }
 }
