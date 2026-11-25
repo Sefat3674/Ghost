@@ -314,9 +314,15 @@ def format_memory_for_prompt(memory: dict | None) -> str:
 
     notes = memory.get("notes", {})
     if notes:
-        lines.append("")
-        lines.append("Other notes:")
-        for key, entry in list(notes.items())[:8]:
+        prompt_notes = [
+            (key, entry)
+            for key, entry in notes.items()
+            if not str(key).startswith("conversation_")
+        ][:8]
+        if prompt_notes:
+            lines.append("")
+            lines.append("Other notes:")
+        for key, entry in prompt_notes:
             val = entry.get("value") if isinstance(entry, dict) else entry
             if val:
                 lines.append(f"  - {key}: {val}")

@@ -73,6 +73,19 @@ class MemoryTest(unittest.TestCase):
         val = mem["notes"]["long_note"]["value"]
         self.assertLessEqual(len(val), mm.MAX_VALUE_LENGTH + 1)
 
+    def test_prompt_memory_excludes_archived_conversations(self):
+        prompt = mm.format_memory_for_prompt({
+            "notes": {
+                "conversation_2026-11-25_16-49": {
+                    "value": "May I send that draft email now?"
+                },
+                "preferred_language": {"value": "Bengali"},
+            }
+        })
+
+        self.assertNotIn("May I send that draft email now?", prompt)
+        self.assertIn("preferred_language: Bengali", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

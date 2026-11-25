@@ -30,6 +30,7 @@ from .scaling import (
     set_ui_scale,
 )
 from .email_client import OutlookEmailClientMixin
+from .outlook_report import OutlookReportDashboardMixin
 from .smart_manufacturing import SmartManufacturingDashboardMixin
 
 
@@ -140,7 +141,11 @@ class _DeckButton:
             pass
 
 
-class GHOSTUI(OutlookEmailClientMixin, SmartManufacturingDashboardMixin):
+class GHOSTUI(
+    OutlookEmailClientMixin,
+    SmartManufacturingDashboardMixin,
+    OutlookReportDashboardMixin,
+):
     def __init__(self, face_path, size=None):
         global _S
         self.root = tk.Tk()
@@ -222,6 +227,7 @@ class GHOSTUI(OutlookEmailClientMixin, SmartManufacturingDashboardMixin):
         self._email_send_requested = set()
         self.on_sm_filter_change = None
         self._sm_dashboard_window = None
+        self._outlook_inbox_summary_window = None
         self.vision_mode = "STANDBY"
         self.vision_signal = "Awaiting camera input"
         self.vision_preview_open = False
@@ -889,6 +895,13 @@ class GHOSTUI(OutlookEmailClientMixin, SmartManufacturingDashboardMixin):
         self._deck_label(Ld, "QUICK ACTIONS", col["pri"])
         self._deck_button(Ld, "OUTLOOK MAIL", "__open_email__",
                           icon="\u2709", accent=col["pri"])
+        self._deck_button(
+            Ld,
+            "SUMMARIZE INBOX",
+            "summarize every email in my personal Outlook inbox across all pages; do not limit it to recent messages",
+            icon="\u2261",
+            accent=col["pri"],
+        )
         self._deck_button(Ld, "VISION ARCADE", "__open_arcade__", icon="\u25c8", accent=acc[3])
         for label, command, icon in [
             ("DAILY BRIEFING", "give me my daily briefing", "\u2630"),
