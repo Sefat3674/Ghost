@@ -1998,6 +1998,8 @@ class GHOSTLive:
         self._approved_human_fingerprint = None
         self._pending_confirmation_token = None
         self._pending_human_action = None
+        # Exact Outlook draft content last shown to the user for review.
+        self._reviewed_outlook_drafts = {}
         self._approved_action_running = False
         self.loop_guard     = LoopGuard()
         from actions.akkhor.service import AkkhorService
@@ -2129,6 +2131,74 @@ class GHOSTLive:
         except Exception as e:
             print(f"[Tray] ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Could not attach tray: {e}")
             import traceback; traceback.print_exc()
+
+    @staticmethod
+    def _outlook_draft_review_signature(snapshot):
+        """Return a stable signature for the exact email shown to the user."""
+        if not isinstance(snapshot, dict):
+            raise ValueError("Draft review snapshot is invalid.")
+
+        subject = snapshot.get("subject")
+        body = snapshot.get("body")
+        if not isinstance(subject, str) or not isinstance(body, (str, dict, list)):
+            raise ValueError("Draft subject or body is unavailable for review.")
+
+        def recipient_signature(field):
+            if snapshot.get(f"{field}_available") is not True:
+                raise ValueError(f"Draft {field.upper()} recipients are unavailable.")
+            items = snapshot.get(field)
+            if not isinstance(items, list):
+                raise ValueError(f"Draft {field.upper()} recipients are invalid.")
+            values = []
+            for item in items:
+                if not isinstance(item, dict):
+                    raise ValueError("Draft recipient entry is invalid.")
+                email = item.get("email")
+                if not isinstance(email, str) or not email.strip():
+                    raise ValueError("Draft recipient email is unavailable.")
+                values.append(email.strip().casefold())
+            return tuple(sorted(values))
+
+        return (
+            subject.strip(),
+            json.dumps(body, ensure_ascii=False, sort_keys=True),
+            recipient_signature("to"),
+            recipient_signature("cc"),
+            recipient_signature("bcc"),
+        )
+
+    def _remember_reviewed_outlook_draft(self, draft_id, snapshot):
+        """Remember only complete, confirmed draft data actually displayed."""
+        if not isinstance(draft_id, str) or not draft_id.strip():
+            return False
+        if not isinstance(snapshot, dict) or snapshot.get("is_draft") is not True:
+            return False
+        try:
+            signature = self._outlook_draft_review_signature(snapshot)
+        except (TypeError, ValueError):
+            return False
+        self._reviewed_outlook_drafts[draft_id] = signature
+        # Bound memory use in long-running sessions.
+        while len(self._reviewed_outlook_drafts) > 50:
+            self._reviewed_outlook_drafts.pop(next(iter(self._reviewed_outlook_drafts)))
+        return True
+
+    @staticmethod
+    def _outlook_sent_timestamp_matches(value, send_started_at):
+        if not isinstance(value, str) or not value.strip():
+            return False
+
+        from datetime import datetime as _send_datetime, timezone as _send_timezone
+
+        try:
+            parsed_time = _send_datetime.fromisoformat(
+                value.strip().replace("Z", "+00:00")
+            )
+            if parsed_time.tzinfo is None:
+                parsed_time = parsed_time.replace(tzinfo=_send_timezone.utc)
+            return parsed_time.timestamp() >= send_started_at - 120
+        except (OSError, OverflowError, ValueError):
+            return False
 
     def _mark_human_confirmed(self):
         if (
@@ -2285,6 +2355,14 @@ class GHOSTLive:
 
                 snapshot = send_verification_snapshot
 
+                reviewed_signature = self._reviewed_outlook_drafts.get(selected_draft_id)
+                if reviewed_signature is None:
+                    raise RuntimeError(
+                        "Send blocked: this exact Outlook draft has not been displayed "
+                        "and reviewed in the current session. Read the draft again, "
+                        "verify its recipient, subject and body, then approve it."
+                    )
+
                 if not isinstance(snapshot, dict):
                     raise RuntimeError(
                         "Send blocked: the draft snapshot is invalid."
@@ -2306,6 +2384,21 @@ class GHOSTLive:
                 ):
                     raise RuntimeError(
                         "Send blocked: the draft subject is missing or unavailable."
+                    )
+
+                try:
+                    current_signature = self._outlook_draft_review_signature(snapshot)
+                except (TypeError, ValueError) as signature_error:
+                    raise RuntimeError(
+                        "Send blocked: the current draft cannot be compared with "
+                        "the reviewed email. No send was attempted."
+                    ) from signature_error
+
+                if current_signature != reviewed_signature:
+                    raise RuntimeError(
+                        "Send blocked: the Outlook draft changed after it was "
+                        "displayed for approval (recipient, subject or body mismatch). "
+                        "No email was sent. Read and review the updated draft again."
                     )
 
                 recipient_fields = ("to", "cc", "bcc")
@@ -2398,7 +2491,6 @@ class GHOSTLive:
             if is_outlook_send_draft:
                 try:
                     import json as _send_json
-                    from datetime import datetime as _send_datetime, timezone as _send_timezone
                     from integrations.personal_outlook_mcp import (
                         personal_outlook_action,
                         _preview_decode,
@@ -2484,6 +2576,7 @@ class GHOSTLive:
                             cursor = None
                             seen_cursors = set()
                             page_limit_reached = False
+                            search_attempts = 0
 
                             for page_number in range(20):
                                 search_arguments = {
@@ -2528,26 +2621,7 @@ class GHOSTLive:
                                     if not candidate_id:
                                         continue
 
-                                    # Reject older messages so an old email
-                                    # cannot verify this send.
-                                    candidate_time = str(
-                                        candidate.get("sent") or ""
-                                    )
-                                    try:
-                                        parsed_time = _send_datetime.fromisoformat(
-                                            candidate_time.replace("Z", "+00:00")
-                                        )
-                                        if parsed_time.tzinfo is None:
-                                            parsed_time = parsed_time.replace(
-                                                tzinfo=_send_timezone.utc
-                                            )
-                                        if (
-                                            parsed_time.timestamp()
-                                            < send_verification_started_at - 120
-                                        ):
-                                            continue
-                                    except (ValueError, TypeError):
-                                        continue
+                                    candidate_time = candidate.get("sent")
 
                                     try:
                                         full_result = await asyncio.to_thread(
@@ -2576,6 +2650,18 @@ class GHOSTLive:
                                         )
                                         continue
 
+                                    actual_sent_time = (
+                                        full_data.get("sent")
+                                        or full_data.get("sent_at")
+                                        or full_data.get("sentDateTime")
+                                        or candidate_time
+                                    )
+                                    if not self._outlook_sent_timestamp_matches(
+                                        actual_sent_time,
+                                        send_verification_started_at,
+                                    ):
+                                        continue
+
                                     actual_subject = str(
                                         full_data.get("subject") or ""
                                     ).strip().casefold()
@@ -2600,6 +2686,15 @@ class GHOSTLive:
                                     break
 
                                 if not search_data.get("has_more"):
+                                    if (
+                                        search_attempts < 9
+                                        and page_number < 19
+                                    ):
+                                        search_attempts += 1
+                                        cursor = None
+                                        seen_cursors.clear()
+                                        await asyncio.sleep(1)
+                                        continue
                                     break
 
                                 next_cursor = search_data.get("cursor")
@@ -2626,8 +2721,9 @@ class GHOSTLive:
                                     str(result)
                                     + "\n\n--- SENT ITEMS VERIFICATION ---\n"
                                     "Verified: a non-draft Sent Items message "
-                                    "was found with the same subject and "
-                                    "To/CC/BCC recipients."
+                                    "was found with the same subject, "
+                                    "To/CC/BCC recipients, and a recent sent "
+                                    "timestamp."
                                 )
                             else:
                                 result = (
@@ -3777,6 +3873,21 @@ class GHOSTLive:
                         draft = _json.loads(display_result)
 
                         if isinstance(draft, dict) and draft.get("subject") is not None:
+                            reviewed_draft_id = (
+                                draft.get("id")
+                                or (args.get("arguments", {}) or {}).get("message_id")
+                            )
+                            if not reviewed_draft_id and str(args.get("tool_name", "")).strip() == "outlook_create_draft":
+                                try:
+                                    create_payload = _json.loads(str(result).split(
+                                        "\n\n--- READ-ONLY DRAFT VERIFICATION ---\n", 1
+                                    )[0])
+                                    if isinstance(create_payload, dict):
+                                        reviewed_draft_id = create_payload.get("draft_id") or create_payload.get("id")
+                                except (ValueError, TypeError):
+                                    reviewed_draft_id = None
+                            self._remember_reviewed_outlook_draft(reviewed_draft_id, draft)
+
                             def _recipient_text(items):
                                 if not items:
                                     return "None"

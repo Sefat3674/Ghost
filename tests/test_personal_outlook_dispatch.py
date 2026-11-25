@@ -539,3 +539,52 @@ class PersonalOutlookDispatchTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+class ReviewedDraftBindingTests(unittest.TestCase):
+
+    def _snapshot(self, **changes):
+        snapshot = {
+            "id": "draft-123",
+            "is_draft": True,
+            "is_draft_available": True,
+            "subject": "Greetings",
+            "body": "Good News",
+            "to_available": True,
+            "cc_available": True,
+            "bcc_available": True,
+            "to": [{"email": "sefatamed3674@gmail.com"}],
+            "cc": [],
+            "bcc": [],
+        }
+        snapshot.update(changes)
+        return snapshot
+
+    def test_remembers_only_complete_reviewed_draft(self):
+        live = main.GHOSTLive(MagicMock())
+        snapshot = self._snapshot()
+
+        self.assertTrue(live._remember_reviewed_outlook_draft("draft-123", snapshot))
+        self.assertEqual(
+            live._reviewed_outlook_drafts["draft-123"],
+            live._outlook_draft_review_signature(snapshot),
+        )
+
+    def test_rejects_incomplete_or_non_draft_review(self):
+        live = main.GHOSTLive(MagicMock())
+        self.assertFalse(live._remember_reviewed_outlook_draft("draft-1", {"is_draft": False}))
+        self.assertFalse(live._remember_reviewed_outlook_draft("draft-2", self._snapshot(body=None)))
+        self.assertEqual(live._reviewed_outlook_drafts, {})
+
+    def test_signature_changes_for_recipient_subject_or_body(self):
+        original = self._snapshot()
+        signature = main.GHOSTLive._outlook_draft_review_signature(original)
+        for changed in (
+            self._snapshot(subject="Different subject"),
+            self._snapshot(body="Different body"),
+            self._snapshot(to=[{"email": "attacker@example.com"}]),
+            self._snapshot(cc=[{"email": "copy@example.com"}]),
+            self._snapshot(bcc=[{"email": "hidden@example.com"}]),
+        ):
+            self.assertNotEqual(
+                signature,
+                main.GHOSTLive._outlook_draft_review_signature(changed),
+            )
