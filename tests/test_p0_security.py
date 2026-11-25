@@ -4,7 +4,7 @@ Covers:
   - document_qa SSRF guard (private/literal-IP targets are refused)
   - desktop.py exec sandbox (ctypes escape removed, spaced-obfuscation blocked)
   - executor UnknownToolError (deterministic skip, no LLM loop)
-  - ui.py _api_keys_exist (validates real keys, not just file existence)
+  - ui/__init__.py _api_keys_exist (validates real keys, not just file existence)
 
 Run: python -m unittest tests.test_p0_security -v
 """

@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from ui_scaling import HiDPICanvas, pick_scale, px, set_ui_scale
+from ui.scaling import HiDPICanvas, pick_scale, px, set_ui_scale
 
 
 class UIScalingTests(unittest.TestCase):

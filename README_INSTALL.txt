@@ -1,6 +1,10 @@
 GHOST + AKKHOR INTEGRATION PATCH
 ================================
 
+NOTE: This guide and its ZIP target the legacy root-level ui.py layout. The
+current GHOST checkout stores UI code in ui/; refresh the ZIP for that package
+layout before applying it.
+
 WHAT IS INCLUDED
 - ui.py: uploaded GHOST UI with an AKKHOR SCHOOL button and panel launcher.
 - main.py: uploaded GHOST main module with Akkhor service wiring and one read-only Gemini tool.

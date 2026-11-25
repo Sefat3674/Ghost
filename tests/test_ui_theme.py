@@ -3,7 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ui_theme import (
+from ui import get_base_dir
+from ui.theme import (
     DEFAULT_BRAND,
     load_brand,
     load_theme_name,
@@ -12,6 +13,9 @@ from ui_theme import (
 
 
 class UIThemeTests(unittest.TestCase):
+
+    def test_base_directory_is_project_root(self):
+        self.assertEqual(get_base_dir(), Path(__file__).resolve().parents[1])
 
     def test_theme_loading_defaults_and_rejects_unknown_names(self):
         with tempfile.TemporaryDirectory() as directory:
