@@ -33,6 +33,7 @@ except ModuleNotFoundError:
     types = None
 
 from ui import GHOSTUI
+from ui.email_client import parse_email_client_command
 from memory.memory_manager import (
     load_memory, update_memory, format_memory_for_prompt
 )
@@ -1693,88 +1694,6 @@ for _decl in TOOL_DECLARATIONS:
 
 
 
-AKKHOR_TOOL_DECLARATIONS = [
-    {
-        "name": "akkhor_school",
-        "description": (
-            "Access the connected Akkhor School Management System. "
-            "Use this tool to read school data and manage users. "
-            "The user must sign in through the GHOST Akkhor panel. "
-            "Actions: status, classes, enrollments, students, "
-            "assignments, submissions, class_courses, class_sections, "
-            "users, create_user, get_user, update_user, delete_user, "
-            "roles, assign_role, reset_password, set_status, user_roles. "
-            "For sensitive actions, obtain explicit user confirmation."
-        ),
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-
-                "action": {
-                    "type": "STRING",
-                    "description": (
-                        "status, classes, enrollments, students, "
-                        "assignments, submissions, class_courses, "
-                        "class_sections, users, create_user, get_user, "
-                        "update_user, delete_user, roles, assign_role, "
-                        "reset_password, set_status, user_roles."
-                    )
-                },
-
-                "classId": {
-                    "type": "STRING",
-                    "description": "Required for class_courses and class_sections."
-                },
-
-                "userId": {
-                    "type": "STRING",
-                    "description": "Akkhor user UUID."
-                },
-
-                "fullName": {
-                    "type": "STRING",
-                    "description": "User full name."
-                },
-
-                "email": {
-                    "type": "STRING",
-                    "description": "User email address."
-                },
-
-                "password": {
-                    "type": "STRING",
-                    "description": "Password for creating a user."
-                },
-
-                "newPassword": {
-                    "type": "STRING",
-                    "description": "New password for password reset."
-                },
-
-                "phoneNumber": {
-                    "type": "STRING",
-                    "description": "User phone number."
-                },
-
-                "role": {
-                    "type": "STRING",
-                    "description": "Akkhor role name."
-                },
-
-                "isActive": {
-                    "type": "BOOLEAN",
-                    "description": "True to activate, false to deactivate."
-                },
-
-                "confirm": {
-                    "type": "BOOLEAN",
-                    "description": "Explicit user confirmation for sensitive actions."
-                }
-            },
-            "required": ["action"]
-        }
-    }
-]
 SMART_MANUFACTURING_TOOL_DECLARATIONS = [
     {
         "name": "smart_manufacturing",
@@ -1838,15 +1757,12 @@ class GHOSTLive:
         self._reviewed_outlook_drafts = {}
         self._approved_action_running = False
         self.loop_guard     = LoopGuard()
-        from actions.akkhor.service import AkkhorService
-        self.akkhor_service = AkkhorService(BASE_DIR)
-        self.ui.set_akkhor_service(self.akkhor_service)
-       
 
         self._smart_manufacturing_handler = None
         self._smart_manufacturing_lock = threading.Lock()
         self._tool_handlers = self._build_tool_handlers()
         self.ui.on_text_command = self._on_text_command
+        self.ui.on_outlook_draft_reviewed = self._remember_reviewed_outlook_draft
         self.enable_bluetooth = False
         self._schedules     = []
         self._sched_lock    = threading.Lock()
@@ -2714,10 +2630,22 @@ class GHOSTLive:
 
     def _on_text_command(self, text: str):
         if self._handle_confirmation_text(text):
-            return
+            return True
+
+        email_command = parse_email_client_command(text)
+        if email_command:
+            action = email_command["action"]
+            if action == "compose":
+                self.ui.open_email_client(compose=True)
+            elif email_command.get("folder"):
+                self.ui.open_email_client(folder=email_command["folder"])
+            else:
+                self.ui.open_email_client()
+            self.ui.write_log("SYS: Outlook mail workspace opened.")
+            return True
 
         if not self._loop or not self.session or not self._send_lock:
-            return
+            return False
 
         async def _send():
             async with self._send_lock:
@@ -2741,6 +2669,7 @@ class GHOSTLive:
                     pass
 
         future.add_done_callback(_report_send_error)
+        return True
 
     def set_speaking(self, value: bool):
         with self._speaking_lock:
@@ -3134,7 +3063,6 @@ class GHOSTLive:
             "create_presentation": (_office_pptx, 60),
             "create_spreadsheet":  (_office_xlsx, 60),
             "smart_home_control":  (_smart_home, 30),
-            "akkhor_school":       (lambda a: self.akkhor_service.tool_action(a), 45),
             "smart_manufacturing": (_smart_manufacturing, 90),
         }
 
@@ -3340,7 +3268,7 @@ class GHOSTLive:
             output_audio_transcription={},
             input_audio_transcription={},
             system_instruction="\n".join(parts),
-            tools=[{"function_declarations": TOOL_DECLARATIONS+ AKKHOR_TOOL_DECLARATIONS+ SMART_MANUFACTURING_TOOL_DECLARATIONS}],
+            tools=[{"function_declarations": TOOL_DECLARATIONS + SMART_MANUFACTURING_TOOL_DECLARATIONS}],
             session_resumption=types.SessionResumptionConfig(),
             context_window_compression=types.ContextWindowCompressionConfig(
                 sliding_window=types.SlidingWindow()
@@ -3982,7 +3910,7 @@ class GHOSTLive:
         config = gtypes.GenerateContentConfig(
             system_instruction=self._telegram_context(),
             tools=[{
-    "function_declarations": TOOL_DECLARATIONS + AKKHOR_TOOL_DECLARATIONS + SMART_MANUFACTURING_TOOL_DECLARATIONS
+    "function_declarations": TOOL_DECLARATIONS + SMART_MANUFACTURING_TOOL_DECLARATIONS
 }],
             temperature=0.4,
         )

@@ -29,6 +29,7 @@ from .scaling import (
     px,
     set_ui_scale,
 )
+from .email_client import OutlookEmailClientMixin
 from .smart_manufacturing import SmartManufacturingDashboardMixin
 
 
@@ -139,7 +140,7 @@ class _DeckButton:
             pass
 
 
-class GHOSTUI(SmartManufacturingDashboardMixin):
+class GHOSTUI(OutlookEmailClientMixin, SmartManufacturingDashboardMixin):
     def __init__(self, face_path, size=None):
         global _S
         self.root = tk.Tk()
@@ -210,9 +211,9 @@ class GHOSTUI(SmartManufacturingDashboardMixin):
         self._batt_ts      = 0.0
 
         self.on_text_command = None
+        self.on_outlook_draft_reviewed = None
+        self._email_send_requested = set()
         self.on_sm_filter_change = None
-        self.akkhor_service = None
-        self._akkhor_panel = None
         self._sm_dashboard_window = None
         self.vision_mode = "STANDBY"
         self.vision_signal = "Awaiting camera input"
@@ -870,8 +871,9 @@ class GHOSTUI(SmartManufacturingDashboardMixin):
         Ld, Rd = self._left_deck, self._right_deck
 
         self._deck_label(Ld, "QUICK ACTIONS", col["pri"])
+        self._deck_button(Ld, "OUTLOOK MAIL", "__open_email__",
+                          icon="\u2709", accent=col["pri"])
         self._deck_button(Ld, "VISION ARCADE", "__open_arcade__", icon="\u25c8", accent=acc[3])
-        self._deck_button(Ld, "AKKHOR SCHOOL", "__open_akkhor__", icon="\u25a3", accent=acc[1])
         for label, command, icon in [
             ("DAILY BRIEFING", "give me my daily briefing", "\u2630"),
             ("SYSTEM STATUS", "show system status", "\u25c9"),
@@ -1191,8 +1193,8 @@ class GHOSTUI(SmartManufacturingDashboardMixin):
         return btn
 
     def _deck_command(self, command, mode=None):
-        if command == "__open_akkhor__":
-            self.open_akkhor_panel()
+        if command == "__open_email__":
+            self.open_email_client()
             return
         if command == "__open_preview__":
             self.open_vision_preview()
@@ -1211,30 +1213,6 @@ class GHOSTUI(SmartManufacturingDashboardMixin):
         self.write_log("SYS: Command deck → " + command)
         if self.on_text_command:
             threading.Thread(target=self.on_text_command, args=(command,), daemon=True).start()
-
-    def set_akkhor_service(self, service):
-        """Attach the shared Akkhor API service created by GHOSTLive."""
-        self.akkhor_service = service
-
-    def open_akkhor_panel(self):
-        """Open or raise the built-in Akkhor school integration panel."""
-        if self.akkhor_service is None:
-            self.write_log("ERR: Akkhor integration service is not initialised yet.")
-            return
-        try:
-            if self._akkhor_panel is not None and self._akkhor_panel.win.winfo_exists():
-                self._akkhor_panel.lift()
-                return
-        except Exception:
-            self._akkhor_panel = None
-        try:
-            from actions.akkhor.akkhor_panel import AkkhorPanel
-            self._akkhor_panel = AkkhorPanel(
-                self.root, self.akkhor_service, on_command=self.on_text_command
-            )
-        except Exception as exc:
-            self.write_log(f"ERR: Could not open Akkhor panel — {exc}")
-
 
     def _clear_log(self):
         self.typing_queue.clear()
