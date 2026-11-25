@@ -117,6 +117,138 @@ class OutlookSentVerificationTests(unittest.TestCase):
         self.assertEqual(calls.count("outlook_search_mail"), 2)
         self.assertEqual(calls.count("outlook_read_message"), 2)
         live._execute_tool.assert_awaited_once()
+        live.ui.open_email_client.assert_called_once_with(folder="sentitems")
+        self.assertEqual(
+            live._last_outlook_send_status["status"],
+            "sent_verified",
+        )
+
+    def test_quota_rejection_is_reported_without_invalid_json_or_retry(self):
+        live = main.GHOSTLive(MagicMock())
+        snapshot = {
+            "id": "draft-rate-limited",
+            "is_draft": True,
+            "is_draft_available": True,
+            "subject": "Rate limit test",
+            "body": "Test body",
+            "to_available": True,
+            "cc_available": True,
+            "bcc_available": True,
+            "to": [{"email": "recipient@example.com"}],
+            "cc": [],
+            "bcc": [],
+        }
+        live._remember_reviewed_outlook_draft("draft-rate-limited", snapshot)
+        live._pending_human_action = {
+            "name": "personal_outlook",
+            "args": {
+                "tool_name": "outlook_send_draft",
+                "arguments": {"draft_id": "draft-rate-limited"},
+            },
+        }
+        live._pending_confirmation_token = "test-token"
+        live._execute_tool = AsyncMock(
+            return_value=SimpleNamespace(
+                response={
+                    "result": (
+                        "Personal Outlook error: Daily Message/Recipient limit exceeded."
+                    )
+                }
+            )
+        )
+        outlook_calls = []
+
+        def mock_outlook_action(args):
+            outlook_calls.append(args["tool_name"])
+            if args["tool_name"] == "outlook_read_message":
+                return json.dumps(snapshot)
+            raise AssertionError(
+                f"Unexpected Outlook tool after send failure: {args['tool_name']}"
+            )
+
+        async def mock_to_thread(function, *args, **kwargs):
+            return function(*args, **kwargs)
+
+        async def run():
+            with (
+                patch.object(
+                    personal_outlook_mcp,
+                    "personal_outlook_action",
+                    side_effect=mock_outlook_action,
+                ),
+                patch.object(main.asyncio, "to_thread", side_effect=mock_to_thread),
+            ):
+                await live._run_approved_pending_action()
+
+        asyncio.run(run())
+
+        logged_result = live.ui.write_log.call_args.args[0]
+        self.assertIn("Microsoft Graph refused the send request", logged_result)
+        self.assertIn("Daily Message/Recipient limit exceeded", logged_result)
+        self.assertIn("No resend was attempted", logged_result)
+        self.assertNotIn("invalid JSON", logged_result)
+        self.assertNotIn("SENT ITEMS VERIFICATION ERROR", logged_result)
+        self.assertEqual(outlook_calls, ["outlook_read_message"])
+        self.assertEqual(
+            live._last_outlook_send_status["status"],
+            "rejected",
+        )
+        self.assertIn(
+            "daily message/recipient limit",
+            live._last_outlook_send_status["summary"],
+        )
+
+    def test_confirmation_suppresses_buffered_audio_for_entire_turn(self):
+        live = object.__new__(main.GHOSTLive)
+        live.ui = SimpleNamespace(silent_mode=False)
+        live.audio_in_queue = MagicMock()
+        live._suppress_confirmation_followup = False
+        audio_chunks = [b"first", b"second"]
+
+        live._release_audio_turn(audio_chunks)
+
+        self.assertEqual(live.audio_in_queue.put_nowait.call_count, 2)
+        self.assertEqual(audio_chunks, [])
+
+        live._suppress_confirmation_followup = True
+        audio_chunks.extend((b"premature response",))
+        live.audio_in_queue.reset_mock()
+
+        live._release_audio_turn(audio_chunks)
+
+        live.audio_in_queue.put_nowait.assert_not_called()
+        self.assertEqual(audio_chunks, [])
+
+    def test_outlook_update_error_is_reported_without_retry_or_readback(self):
+        live = main.GHOSTLive(MagicMock())
+        live._pending_human_action = {
+            "name": "personal_outlook",
+            "args": {
+                "tool_name": "outlook_update_draft",
+                "arguments": {
+                    "draft_id": "draft-update-error",
+                    "to": ["recipient@example.com"],
+                },
+            },
+        }
+        live._pending_confirmation_token = "test-token"
+        live._execute_tool = AsyncMock(
+            return_value=SimpleNamespace(
+                response={
+                    "result": (
+                        "Personal Outlook error: Outlook refused the draft update."
+                    )
+                }
+            )
+        )
+
+        asyncio.run(live._run_approved_pending_action())
+
+        logged_result = live.ui.write_log.call_args.args[0]
+        self.assertIn("Outlook refused the draft update", logged_result)
+        self.assertIn("no update was verified", logged_result)
+        self.assertIn("No retry was attempted", logged_result)
+        live._execute_tool.assert_awaited_once()
 
 
 if __name__ == "__main__":

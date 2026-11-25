@@ -145,7 +145,14 @@ class GHOSTUI(OutlookEmailClientMixin, SmartManufacturingDashboardMixin):
         global _S
         self.root = tk.Tk()
         self.brand = _load_brand()
-        self.root.title(f"{self.brand['product']}  |  {self.brand['company'].title()}  \u2014  {self.brand['division']}")
+        title = (
+            f"{self.brand['product']}  |  "
+            f"{self.brand['company'].title()}"
+        )
+        division = str(self.brand.get("division") or "").strip()
+        if division:
+            title += f"  \u2014  {division}"
+        self.root.title(title)
         self.root.resizable(True, True)
 
         sw = self.root.winfo_screenwidth()
@@ -456,23 +463,32 @@ class GHOSTUI(OutlookEmailClientMixin, SmartManufacturingDashboardMixin):
 
     def _load_logo(self):
         self._logo, self._logo_w = None, 0
-        if Image is None or ImageTk is None:
-            return
         try:
             p = Path(str(self.brand.get("logo") or ""))
             if not p.is_absolute():
                 p = BASE_DIR / p
             if not p.is_file():
                 return
-            img = Image.open(p).convert("RGBA")
             h = int(round(40 * self.S))
-            w = max(1, int(img.width * h / img.height))
             max_w = int(190 * self.S)
-            if w > max_w:
-                w, h = max_w, max(1, int(img.height * max_w / img.width))
-            img = img.resize((w, h), Image.Resampling.LANCZOS)
-            self._logo = ImageTk.PhotoImage(img)
-            self._logo_w = w / self.S
+            if Image is not None and ImageTk is not None:
+                img = Image.open(p).convert("RGBA")
+                w = max(1, int(img.width * h / img.height))
+                if w > max_w:
+                    w, h = max_w, max(1, int(img.height * max_w / img.width))
+                img = img.resize((w, h), Image.Resampling.LANCZOS)
+                self._logo = ImageTk.PhotoImage(img)
+                self._logo_w = w / self.S
+            else:
+                img = tk.PhotoImage(file=str(p))
+                factor = max(
+                    1,
+                    int(round(max(img.width() / max_w, img.height() / h))),
+                )
+                if factor > 1:
+                    img = img.subsample(factor, factor)
+                self._logo = img
+                self._logo_w = img.width() / self.S
         except Exception:
             self._logo, self._logo_w = None, 0
 
@@ -1992,7 +2008,7 @@ class GHOSTUI(OutlookEmailClientMixin, SmartManufacturingDashboardMixin):
         c.create_line(0, HDR, W, HDR, fill=col["mid"], width=1)
         c.create_rectangle(0, HDR - 2, min(W, 260), HDR, fill=col["pri"], outline="")
 
-        # brand block: logo (or emblem) + company + division + persona
+        # brand block: logo (or emblem) + company + persona
         x = 16
         if self._logo is not None:
             if B.get("logo_plate", True):
@@ -2006,8 +2022,9 @@ class GHOSTUI(OutlookEmailClientMixin, SmartManufacturingDashboardMixin):
             x += 48
         c.create_text(x, 22, text=B["company"], fill=col["text"],
                       font=("Segoe UI", 13, "bold"), anchor="w")
-        if W >= 940:
-            c.create_text(x, 41, text=B["division"], fill=col["mid"],
+        division = str(B.get("division") or "").strip()
+        if division and W >= 940:
+            c.create_text(x, 41, text=division, fill=col["mid"],
                           font=("Segoe UI", 8), anchor="w")
         badge = (f"\u25c8 {self.persona_mode.upper()} \u00b7 "
                  f"{self.persona_mood.upper()} \u00b7 {self.persona_voice}")
@@ -2015,9 +2032,10 @@ class GHOSTUI(OutlookEmailClientMixin, SmartManufacturingDashboardMixin):
                       font=("Segoe UI", 8, "bold"), anchor="w")
 
         # product title
-        c.create_text(W // 2, 26, text=B["product"], fill=col["pri"],
+        product_x = W // 2
+        c.create_text(product_x, 26, text=B["product"], fill=col["pri"],
                       font=("Segoe UI", 18, "bold"))
-        c.create_text(W // 2, 48, text=B["tagline"], fill=col["mid"],
+        c.create_text(product_x, 48, text=B["tagline"], fill=col["mid"],
                       font=("Segoe UI", 8))
 
         c.create_text(W - 16, 20, text=time.strftime("%H:%M:%S"), fill=col["pri"],

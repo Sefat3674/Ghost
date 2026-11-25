@@ -115,7 +115,12 @@ def _capture_camera() -> bytes:
     return buf.tobytes()
 
 
-def _analyze_image_text(image_bytes: bytes, mime_type: str, user_text: str, model: str = "gemini-2.5-flash") -> str:
+def _analyze_image_text(
+    image_bytes: bytes,
+    mime_type: str,
+    user_text: str,
+    model: str = "gemini-3.8-flash",
+) -> str:
     """Synchronous vision: send image + question to Gemini, return the text answer.
     This is the path that feeds vision results BACK into the main conversation."""
     import google.genai.types as gtypes

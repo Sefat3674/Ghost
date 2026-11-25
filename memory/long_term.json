@@ -1,11 +1,11 @@
 {
   "identity": {
     "name": {
-      "value": "Sefat",
+      "value": "Sifat",
       "updated": "2026-11-25"
     },
     "email": {
-      "value": "sefatabmed367@gmail.com",
+      "value": "sefatahmed3674@gmail.com",
       "updated": "2026-11-25"
     },
     "city": {
@@ -20,6 +20,14 @@
     },
     "hobby": {
       "value": "drawing",
+      "updated": "2026-11-25"
+    },
+    "new_email_behavior": {
+      "value": "Automatically open compose mode when user mentions sending an email",
+      "updated": "2026-11-25"
+    },
+    "meals": {
+      "value": "includes sabji",
       "updated": "2026-11-25"
     }
   },
@@ -63,6 +71,14 @@
     "ghost_ai_assistant": {
       "value": "Working on project update and outlook v4 integration, draft email saved to tomarseventh367@gmail.com",
       "updated": "2026-11-25"
+    },
+    "smart_home_api": {
+      "value": "Planning to build an API integration to fetch and display reports from smart home manufacturer modules",
+      "updated": "2026-11-25"
+    },
+    "api_llm_report": {
+      "value": "Planning to fetch data from an API, run it through an LLM, and generate a report to test the concept",
+      "updated": "2026-11-25"
     }
   },
   "relationships": {
@@ -100,6 +116,78 @@
     },
     "conversation_2026-11-25_11-50": {
       "value": "User: जी हेलो।\nGHOST: नमस्ते। मैं आपकी किस तरह मदद कर सकता हूँ?\nUser: Bangla te bolo.\nGHOST: ঠিক আছে, আমি বাংলায় কথা বলতে পারি। আপনাকে আজকে কীসে সাহায্য করতে পারি?\nUser: Check to me a good news. Subject actor draft mail dikhao.\nGHOST: acknowledgement একটু অপেক্ষা করুন। আমি আপনার আউটলুক থেকে \"good news\" সাবজেক্টের ড্রাফট মেইলটি খুঁজে বের করছি।\nUser: Me gusta mucho el dibujo.\nGHOST: ওই বিষয়ের কোনো ",
+      "updated": "2026-11-25"
+    },
+    "conversation_2026-11-25_13-56": {
+      "value": "User: अच्छा।\nGHOST: সবই ঠিক আছে। আমি কি ড্রাফটটি আবার পাঠানোর চেষ্টা করব, নাকি আপনি ড্রাফটটি দেখতে চান?\nUser: না না না তুমি শুরু তুমি বাংলাতে কথা বলো।\nGHOST: ঠিক আছে, আমি বাংলাতেই কথা বলছি। আপনি কি ড্রাফটটি নিয়ে কিছু করতে চান, নাকি অন্য কোনো বিষয়?\nUser: না অন্য কোন বিষয়। ড্রাফট নিয়ে কিছু বলবো না এখন।\nGHOST: ঠিক আছে। তাহলে বলুন, আমি আপনাকে আজ কিভাবে সাহায্য করতে পারি?\nUser: अच्छा, तुम ही मुझे ड्र",
+      "updated": "2026-11-25"
+    },
+    "conversation_2026-11-25_14-05": {
+      "value": "User: Hello. Amar kotha shona jachche?\nGHOST: হ্যাঁ, আমি আপনাকে শুনতে পাচ্ছি। আপনাকে কিভাবে সাহায্য করতে পারি?\nUser: अच्छा, मेरा एक ना मेल भेजना होगा आउटलुक में।\nGHOST: এখানে কিছু ড্রাফট দেওয়া হলো: ১. Subject: \"Good evening\" ২. Subject: \"Outlook Email Approval Required\" ৩. Subject: \"Ghost Outlook Draft Creation Test 2026-11-24\" আপনি কি এর মধ্য কোনটি পাঠাতে চান, নাকি নতুন মেইল তৈরি করতে চান?\nUser: ",
+      "updated": "2026-11-25"
+    },
+    "conversation_2026-11-25_14-08": {
+      "value": "User: अच्छा, तुम यह एक काम करो, ड्राफ्ट में जाओ।\nGHOST: GHOST Outlook মেইল ড্রাফট ভিউ খোলা হচ্ছে।\nUser: Ah ah tumi third number ah mail topen karo.\nGHOST: ৩ নম্বর ড্রাফটটি এখানে দেওয়া হলো: **To:** sefatahmed3674@gmail.com **CC:** None **BCC:** None **Subject:** Ghost Outlook Draft Creation Test 2026-11-24 **Body:** This is a test draft created by Ghost to verify Outlook draft creation. Do not send",
+      "updated": "2026-11-25"
+    },
+    "conversation_2026-11-25_14-14": {
+      "value": "User: আমি পেজটা স্ক্রল করে দেখছি বাট সেন্ড বাটনটা আমি পাই নাই।\nGHOST: ব্যাপারটা তো অদ্ভুত! ঠিক আছে, আমি আপনার স্ক্রিনটা একবার দেখতে চাই, দেখি আমি বাটনটা খুঁজে পাই কি না। অনুমতি দিন।\nUser: হ্যাঁ হ্যাঁ, স্ক্রিনটা দেখো।\nGHOST: কই দেখি, কী এমন হলো সেন্ড বাটনটার! দুঃখিত, আমি এই মুহূর্তে আপনার স্ক্রিনটা দেখতে পাচ্ছি না। টেকনিক্যাল সমস্যা হচ্ছে। আপনি কি আরেকবার কষ্ট করে পেজটা রিলোড দিয়ে দেখবেন? অথবা আমি ",
+      "updated": "2026-11-25"
+    },
+    "conversation_2026-11-25_14-18": {
+      "value": "User: अच्छा, तुम मेरा आउटलुक ओपन करो।\nGHOST: আপনার আউটলুক মেল ইন্টারফেসটি খোলা হচ্ছে।\nUser: अच्छा, यह तार या कोइल ड्राफ्ट\nGHOST: \nUser: and 10,000 10,000 3 number mainta khule\nGHOST: তিন নম্বর ড্রাফটটি খোলা হয়েছে।\nUser: सर, तीन नंबर ड्राफ्ट एडिट में जाओ।\nGHOST: ড্রাফটটি এডিটরে খোলা হয়েছে। আপনি এতে কি পরিবর্তন করতে চান?\nUser: The message to change and write good noon.\nGHOST: বার্তাটি পরিবর্তন করার ",
+      "updated": "2026-11-25"
+    },
+    "conversation_2026-11-25_14-21": {
+      "value": "GHOST: \nUser: আমি বারবার একটা লুপের মধ্যে আটকায়ে গেছি।\nGHOST: আমি আন্তরিকভাবে দুঃখিত, সিস্টেমের কারণে বারবার লুপ হচ্ছে। আমি শেষ বারের মত চেষ্টা করছি, দয়া করে 'হ্যাঁ' বলুন। আমি কি ড্রাফটটি পরিবর্তন করতে পারি?\nUser: That's how Outlook open.\nGHOST: ঠিক আছে, আউটলুক মেল ইন্টারফেসটি খোলা হচ্ছে।\nUser: हां, प्रथम मैसेज को तुम रीड करो। दिखाओ।\nGHOST: \nUser: Inbox er prothom message ta read koro.\nGHOST: এখান",
+      "updated": "2026-11-25"
+    },
+    "conversation_2026-11-25_14-33": {
+      "value": "User: अच्छा, तुम यह कोड एक मेल भेजो।\nGHOST: ঠিক আছে, কাকে মেইলটি পাঠাতে চান, মেইলের বিষয় এবং মূল বার্তাটি আমাকে বলুন।\nUser: अच्छा, तुम इया करो। आउटलुक मेल ओपन करो।\nGHOST: আউটলুক ইনবক্স খোলা হয়েছে।\nUser: মানে আমি যখন বলব যে একটা মেইল পাঠাতে চাই, তুমি তখন হচ্ছে নিউ মেইল মডিউলে নিউ মেইল মডিউলে চলে যাইবা।\nGHOST: \nUser: तुम्हारे जाते ना बोला लगे जे खोलो।\nGHOST: \nUser: Tumhi karo draft mein jao.\nGHOST: ",
+      "updated": "2026-11-25"
+    },
+    "conversation_2026-11-25_14-38": {
+      "value": "GHOST: আউটলুক ইনবক্স খোলা হয়েছে।\nUser: মানে আমি যখন বলব যে একটা মেইল পাঠাতে চাই, তুমি তখন হচ্ছে নিউ মেইল মডিউলে নিউ মেইল মডিউলে চলে যাইবা।\nGHOST: \nUser: तुम्हारे जाते ना बोला लगे जे खोलो।\nGHOST: \nUser: Tumhi karo draft mein jao.\nGHOST: ড্রাফট ফোল্ডার খোলা হয়েছে।\nUser: अच्छा, ड्राफ्ट में जाए। प्रथम मेलटाई ओपन करो।\nGHOST: \nUser: আচ্ছা তুমি প্রথম না তুমি পাঁচ নাম্বার মেইলটা ওপেন করো।\nGHOST: GHOST PRA",
+      "updated": "2026-11-25"
+    },
+    "conversation_2026-11-25_14-49": {
+      "value": "**Draft ID:** AQMkADAwATM3ZmYAZS0yOWM3LWI4NDUtMDACLTAwCgBGAAADFGxjp50S5ESyn4POswThzQcAAACv-qgOdQxLmBXMl-zWPZgAAAIBDwAAAa-_qA51DEuYFcyX-NY9mAAGYabnKQAAAA==\n\nআপনি কি এটি পাঠাতে চান?\nUser: আমি পাঠাইতেছি।\nGHOST: আমি কি নির্বাচিত ড্রাফটটি পাঠাতে পারি?\nUser: তুমি কি নির্বাচিত মেইলটি পাঠাইতে পারছো?\nGHOST: মেইলটি পাঠানোর জন্য আপনার মৌখিক অনুমতির প্রয়োজন। আমি কি ড্রাফটটি পাঠাতে পারি?\nUser: s\nGHOST: 's' দি",
+      "updated": "2026-11-25"
+    },
+    "conversation_2026-11-25_15-00": {
+      "value": "User: Hello.\nGHOST: Hello. How can I assist you today?\nUser: Yeah, mein ek mail bhejta chahta hun.\nGHOST: ঠিক আছে, কাকে মেইলটি পাঠাতে চান, মেইলের বিষয় এবং মূল বার্তাটি আমাকে বলুন।\nUser: asifahmed3674@gmail.com\nGHOST: আপনি কি 'sifahmed3674@gmail.com'\nUser: हां, तुम ही हो से पैनल लिखो। पैनल पर लिख लेना।\nGHOST: ঠিক আছে, মেইলটি ড্রাফট করার জন্য বিষয় এবং মূল বার্তাটি দিন।\nUser: Manne jab ko ra mein bol",
+      "updated": "2026-11-25"
+    },
+    "conversation_2026-11-25_15-03": {
+      "value": "User: I want to send an email.\nGHOST: ঠিক আছে, কাকে মেইলটি পাঠাতে চান, মেইলের বিষয় এবং মূল বার্তাটি আমাকে বলুন।\nUser: stevetom@gmail.com\nGHOST: ঠিক আছে, 'stevetom@gmail.com'-কে মেইলটি পাঠাতে চান। বিষয়টি কী এবং মেইলে কী লিখতে চান?\nUser: আচ্ছা বিষয়টা হচ্ছে যে হ্যালো ওয়ার্ল্ড এন্ড সাবজেক্ট এন্ড মূল বার্তাটা হচ্ছে হ্যালো ওয়ার্ল্ড।\nGHOST: ড্রাফটটি তৈরি করা হয়েছে। এখানে বিস্তারিত দেওয়া হলো: **To:** s",
+      "updated": "2026-11-25"
+    },
+    "conversation_2026-11-25_15-15": {
+      "value": "User: Hello, I want to send a mail.\nGHOST: Who would you like to send the email to, what is the subject, and what is the message?\nUser: sifat ahmed 3674@gmail.com\nGHOST: I have populated the recipient field with sifat ahmed 3674@gmail.com. Is that address correct, and what are the subject and message?\nUser: No, the address is not correct.\nGHOST: \nUser: I give you the address. s e f a t a h m e d 3",
+      "updated": "2026-11-25"
+    },
+    "email": {
+      "value": "sefat ahmed 3674@gmail.com",
+      "updated": "2026-11-25"
+    },
+    "conversation_2026-11-25_15-21": {
+      "value": "User: meals include sabji\nGHOST: ব্যক্তিগত Outlook অ্যাকাউন্ট থেকে মেইল পাঠাতে চাইলে, কাকে পাঠাতে চান, মেইলের বিষয় এবং মেইন বার্তাটা আমাকে বলুন। নতুন মেইল উইন্ডো খোলা হয়েছে। আপনি ডিটেইলসগুলি বলুন।\nUser: আচ্ছা তুমি পাঠাও হচ্ছে sefat ahmed 3674@gmail.com\nGHOST: ঠিক আছে, প্রাপক ঠিক করা হয়েছে। মেইলের বিষয় এবং মূল বার্তা কি হবে?\nUser: আমি হচ্ছে একটু ইয়া এডিট করে দিচ্ছি।\nGHOST: আপনি কি নতুন করে কিছু লিখ",
+      "updated": "2026-11-25"
+    },
+    "conversation_2026-11-25_15-24": {
+      "value": "User: আচ্ছা, আমি হচ্ছে মেইল পাঠাইতে চাই।\nGHOST: ঠিক আছে, কাকে মেইলটি পাঠাতে চান, মেইলের বিষয় এবং মূল বার্তাটি আমাকে বলুন।\nUser: Tamil puthitha jeyothis sepatha mithri c74@gmail.com\nGHOST: ঠিক আছে, মেইলটি \"sepatha mithri 3674@gmail.com\" এ যাবে। এটি কি সঠিক?\nUser: না না, এটা সঠিক না। আমি সঠিকটা বলে দিতেছি। সেটা হচ্ছে acfat ahmed3674@gmail.com\nGHOST: আমার মনে হচ্ছে আমি ঠিকভাবে বুঝতে পারিনি। আপনি কি ম",
+      "updated": "2026-11-25"
+    },
+    "conversation_2026-11-25_15-27": {
+      "value": "User: Nah, ini address-nya abang change ke\nGHOST: কোন ঠিকানায় পাঠাতে চান তাহলে বলুন?\nUser: SEFATAHMED3674@gmail.com\nGHOST: দুঃখিত, আমি ঠিকভাবে বুঝতে পারিনি। আপনি কি মেইলটি \"SEFATAHMED3674@gmail.com\" এ পাঠাতে চান কিনা?\nUser: Yes.\nGHOST: ঠিক আছে, মেইলটি \"SEFATAHMED3674@gmail.com\" এ প্রস্তুত। এবার বিষয় এবং মূল বার্তাটি দিন।\nUser: तो सेफ आता उम्मीद, यह तो हो जाते में छोटे अक्षर में होगा। स्मालेस्ट लेट",
+      "updated": "2026-11-25"
+    },
+    "conversation_2026-11-25_15-36": {
+      "value": "User: Hello ghost.\nGHOST: Hello Sifat. How can I assist you today?\nUser: ¿Eh? Esto es lo que vos vos no me mandaste. No, esta la mandaste el otro día. Esto es lo que vos vos no me mandaste. No, esta la mandaste el otro día.\nGHOST: \nUser: pure penalty agitated I am course it is it is shelo Kaiju Mina\nGHOST: আমি কি আপনার কোনো কাজে সাহায্য করতে পারি?\nUser: অনেক কিছুই আপনার মানে অন্যরকম ছিল। পরে আমি চ",
+      "updated": "2026-11-25"
+    },
+    "email_address": {
+      "value": "sefatamme3674@gmail.com",
       "updated": "2026-11-25"
     },
     "conversation_2026-11-24_01-19": {
@@ -165,78 +253,6 @@
     "conversation_2026-11-16_15-11": {
       "value": "User: हां, मूव करो।\nGHOST: দুঃখিত, মনে হচ্ছে কোনো কারণে অনুমতিটি পেন্ডিং দেখাচ্ছে। এই ইমেইলটি Junk Email ফোল্ডারে মুভ করার জন্য আপনি কি আবার অনুমতি দেবেন?\nUser: হ্যাঁ, অনুমতি দিচ্ছে।\nGHOST: আবারও দুঃখিত, আমি আপনার অনুমতিটি নির্দিষ্ট করতে পারছি না। অনুগ্রহ করে কি শেষ বারের মতো নিশ্চিত করবেন? আপনি কি চান আমি \"Ghost Outlook Integration Test\" ইমেইলটি Junk Email ফোল্ডারে মুভ করি? [token: 8rgFvNkpDe-WnM",
       "updated": "2026-11-16"
-    },
-    "conversation_2026-11-16_15-14": {
-      "value": "GHOST: বারবার বাধার জন্য দুঃখিত, সিস্টেম আবার নতুন একটি টোকেন তৈরি করেছে। আমি কি এইবার অনুমতিটি পেতে পারি? আমি কি ইমেইলটি Junk Email ফোল্ডারে মুভ করব? [token: Wk0N-ZgVthKQLGRoZ4u_5rjjKxxLyfON]\nUser: Hum. É?\nGHOST: আবারও মনে হচ্ছে সিস্টেম ব্লক করে দিয়েছে। আমি সত্যিই দুঃখিত, কিন্তু প্রতিটা বাধার পর আমাকে আবার নতুন করে অনুমতি চাইতে হচ্ছে। আপনি কি অনুগ্রহ করে আরেকবার বলবেন, \"হ্যাঁ, মুভ করো\"? তাহলে আম",
-      "updated": "2026-11-16"
-    },
-    "conversation_2026-11-16_15-40": {
-      "value": "User: \nGHOST: I have previewed moving the urgent project review email to Ghost_Test_Folder_Renamed; one matching email was found. No emails have been moved yet.\nUser: \nGHOST: Correct. That is the single email matching your criteria.\nUser: \nGHOST: Yes, `Ghost_Test_Folder_Renamed` is identified as the correct destination for the move.\nUser: \nGHOST: I believe there may be a misunderstanding. I need *",
-      "updated": "2026-11-16"
-    },
-    "conversation_2026-11-15_18-00": {
-      "value": "User: Hello.\nGHOST: Hello. How can I assist you today?\nUser: আগামীকাল আমাদের কি কি মিটিং আছে?\nGHOST: গুগল অথোরাইজড করা নেই। আমি গুগল অথোরাইজেশন প্রক্রিয়াটি শুরু করছি। লিঙ্কে গিয়ে কোডটি এন্টার করুন। এরপর ক্যালেন্ডার চেক করতে পারব। দুঃখিত, গুগল পরিষেবাটি কনফিগার করা নেই। কনফিগারেশনে 'google_client_id' এবং 'google_client_secret' যোগ করতে হবে।\nUser: हां, तुम क्या मेरा आउटलुक चेक दे सकते हो?\nGHOST: আপন",
-      "updated": "2026-11-15"
-    },
-    "conversation_2026-11-08_13-33": {
-      "value": "User: \nGHOST: The statistical report for PRAN is ready. Out of 27,702 machines, only 2,386 are classified as smart, which is about 8.78%.\nUser: \nGHOST: There are 27,702 machines in total.\nUser: \nGHOST: We have 2,432 smartable machines.\nUser: \nGHOST: The smart machine percentage for PRAN is 98.11%.\nUser: \nGHOST: Approximately 91.39% of the machines are manually operated.\nUser: \nGHOST: 1.98 percent ",
-      "updated": "2026-11-08"
-    },
-    "conversation_2026-11-08_14-29": {
-      "value": "User: \nGHOST: Greetings. How can I assist you today?\nUser: \nGHOST: There are 27,702 machines for PRAN.\nUser: \nGHOST: There are 32,646 machines for RFL.\nUser: \nGHOST: Can you please clarify what you would like to do with PIP?\nUser: \nGHOST: There are 14,339 machines for PIP.\nUser: \nGHOST: There are 1,148 smart machines for PIP.\nUser: \nGHOST: No machine audit records were found for that location and ",
-      "updated": "2026-11-08"
-    },
-    "conversation_2026-11-08_16-07": {
-      "value": "User: É novo. Hello.\nGHOST: Greetings. How can I assist you today?\nUser: Hello, how many machines in Pran?\nGHOST: There are 27,702 machines for PRAN.\nUser: Are are are you quite emotional so?\nGHOST: I don't experience emotions; I operate purely on logic and information. How can I help you next?\nUser: Hello.\nGHOST: Hello. How can I help you today?\nUser: How How many machines in RFL? mother company ",
-      "updated": "2026-11-08"
-    },
-    "conversation_2026-11-08_16-18": {
-      "value": "User: \nGHOST: I have retrieved the general report. Could you please clarify which aspect you'd like to discuss, like OEE enablement or runtime?\nUser: \nGHOST: Regarding performance, 13,994 machines are OEE enabled, representing 22.86 percent. Is there a particular business unit or section you'd like to focus on?\nUser: \nGHOST: There are 7,327 smart machines and 53,829 non-smartable machines. Anythin",
-      "updated": "2026-11-08"
-    },
-    "conversation_2026-11-01_11-44": {
-      "value": "User: \nGHOST: Greetings. How can I assist you today?\nUser: \nGHOST: I'm not currently connected to Akkhor School. Please open the Akkhor panel in GHOST and sign in.\nUser: \nGHOST: I am GHOST, a sharp, efficient AI assistant designed for direct computer control and task execution. I am ready to help with files, browsing, media, and managing your schedule. Currently, I am running on your computer, tho",
-      "updated": "2026-11-01"
-    },
-    "conversation_2026-11-01_12-24": {
-      "value": "User: \nGHOST: I cannot display your classes because you are not connected yet. Please sign in from the GHOST Akkhor panel first.\nUser: \nGHOST: Here are your Akkhor classes: Class 1, Class 10, Class 2, Class 3, Class 4, Class 5, Class 6, Class 7, Class 8, Class 9, KG, Nursery, and Play.\nUser: \nGHOST: I don't have information on the number of sections available. My current tools let me see classes, ",
-      "updated": "2026-11-01"
-    },
-    "conversation_2026-11-01_12-40": {
-      "value": "User: \nGHOST: Please sign in through the GHOST Akkhor panel first to use this feature.\nUser: \nGHOST: Here is the current enrollment information you requested.\nUser: \nGHOST: I am unable to access that information at the moment. Access was forbidden.\nUser: \nGHOST: There are currently no assignment submissions recorded.\nUser: \nGHOST: I still have no information on the number of classes. Please ensure",
-      "updated": "2026-11-01"
-    },
-    "conversation_2026-10-31_15-13": {
-      "value": "User: \nGHOST: I have opened Akkhor School.\nUser: \nGHOST: To log in, you'll need to sign in through the GHOST Akkhor School panel. I can't directly enter credentials for you.\nUser: \nGHOST: You'll need to use the dedicated GHOST Akkhor School panel to sign in; I can't directly enter your credentials.\nUser: \nGHOST: Please enter that email address into the login panel on your screen. I cannot submit l",
-      "updated": "2026-10-31"
-    },
-    "conversation_2026-10-30_03-14": {
-      "value": "User: Tum hamar Facebook ke thuko.\nGHOST: ঠিক আছে, আমি Facebook-এ যাচ্ছি। ইতোমধ্যে Facebook খোলা হয়ে গেছে।\nUser: Hello.\nGHOST: Hello. How can I assist you today?\nUser: Ho gaya hai second one.\nGHOST: \nUser: हैं?\nGHOST: मुझे समझ नहीं आया। आप किस 'second one' की बात कर रहे हैं?\nUser: Hello.\nGHOST: Hello again. Is there anything else I can help you with?\nUser: です 。 来い 。 て やる よ 、 どけ たん 。 騒い で",
-      "updated": "2026-10-30"
-    },
-    "conversation_2026-10-30_15-17": {
-      "value": "User: ¿Eh?\nGHOST: I'm not sure I understand. Could you please clarify what you need?\nUser: Está en lectura de memoria.\nGHOST: ¿Hay algo específico que te gustaría que recordara, o tienes curiosidad acerca de lo que tengo guardado en mi memoria?\nUser: Hello.\nGHOST: হ্যালো! আপনাকে কোনো সাহায্য করতে পারি?\nUser: বলেন।\nGHOST: বলুন, আমি কিভাবে আপনাকে সাহায্য করতে পারি?\nUser: Ya dice que los ya n",
-      "updated": "2026-10-30"
-    },
-    "conversation_2026-10-30_21-20": {
-      "value": "User: Hello.\nGHOST: Hello again. Is there anything else I can help you with?\nUser: です 。 来い 。 て やる よ 、 どけ たん 。 騒い でん の は かずき 。 やろ 、 じゅん 。\nGHOST: \nUser: Oh, achso.\nGHOST: お話し中 のところ すみません。 文 脈 や 話 の内容 が わから なくて、 ちょっ と理解 が追 いつ いてい ないです。 どの ような こと でお困 りで すか?\nUser: \nGHOST: I've noticed the high CPU usage. Currently, winlogon.exe, wininit.exe, and some VNC processes are among the top consumers. I",
-      "updated": "2026-10-30"
-    },
-    "conversation_2026-10-29_15-50": {
-      "value": "User: Hello.\nGHOST: Greetings. How can I assist you today?\nUser: lenlen len\nGHOST: I'm not sure I understand. Could you please clarify what you need?\nUser: 이미지 아닌 애들\nGHOST: 어떤 걸 말씀하시는지 좀 더 자세히 알려주실 수 있을까요? 컴퓨터 내의 파일을 말씀하시는 건지, 화면에 보이는 것을 말씀하시는 건지 알려주시면 도와드릴게요.\nUser: mi\nGHOST: 죄송하지만, \"mi\"만으로는 어떤 말씀이신지 알기가 어렵네요. 좀 더 자세히 말씀해 주실 수 있을까요?\nUser: Hello.\nGHOST: Hello. How can I assist you today?\n",
-      "updated": "2026-10-29"
-    },
-    "conversation_2026-10-29_15-53": {
-      "value": "User: Yes, I am interested. Do you speak in Bengali?\nGHOST: হ্যাঁ, আমি বাংলায় কথা বলতে পারি। আপনাকে কি কোন কিছুতে সাহায্য করতে পারি?\nUser: তুমি YouTube এ একটি গান চালাও।\nGHOST: ঠিক আছে, YouTube-এ গান চালাচ্ছি। কোন গানটি শুনতে চান?\nUser: दोबारा चालू करो।\nGHOST: ঠিক আছে, আমি আবার গানটি চালিয়ে দিচ্ছি।\nUser: A\nGHOST: আমি আপনার কথাটি পুরোপুরি বুঝতে পারি নি। আপনি কি কিছু বলতে চাইছেন?\nUser: तुम ह",
-      "updated": "2026-10-29"
-    },
-    "conversation_2026-10-29_15-55": {
-      "value": "User: Yes, I am interested. Do you speak in Bengali?\nGHOST: হ্যাঁ, আমি বাংলায় কথা বলতে পারি। আপনাকে কি কোন কিছুতে সাহায্য করতে পারি?\nUser: তুমি YouTube এ একটি গান চালাও।\nGHOST: ঠিক আছে, YouTube-এ গান চালাচ্ছি। কোন গানটি শুনতে চান?\nUser: दोबारा चालू करो।\nGHOST: ঠিক আছে, আমি আবার গানটি চালিয়ে দিচ্ছি।\nUser: A\nGHOST: আমি আপনার কথাটি পুরোপুরি বুঝতে পারি নি। আপনি কি কিছু বলতে চাইছেন?\nUser: तुम ह",
-      "updated": "2026-10-29"
-    },
-    "conversation_2026-10-29_15-57": {
-      "value": "User: Hello.\nGHOST: Greetings. How can I assist you today?\nUser: lenlen len\nGHOST: I'm not sure I understand. Could you please clarify what you need?\nUser: 이미지 아닌 애들\nGHOST: 어떤 걸 말씀하시는지 좀 더 자세히 알려주실 수 있을까요? 컴퓨터 내의 파일을 말씀하시는 건지, 화면에 보이는 것을 말씀하시는 건지 알려주시면 도와드릴게요.\nUser: mi\nGHOST: 죄송하지만, \"mi\"만으로는 어떤 말씀이신지 알기가 어렵네요. 좀 더 자세히 말씀해 주실 수 있을까요?\nUser: Hello.\nGHOST: Hello. How can I assist you today?\n",
-      "updated": "2026-10-29"
     }
   }
 }

@@ -4,9 +4,9 @@ import threading
 import json
 import sys
 import os
+import re
 import time
 import traceback
-import re
 from importlib import import_module
 from pathlib import Path
 
@@ -1458,7 +1458,15 @@ TOOL_DECLARATIONS = [
 
             "NEW EMAIL DRAFTING AND SENDING: For every request to compose "
             "or send a new email from personal Outlook, first collect any "
-            "missing recipient, subject, or body details. Then call this tool "
+            "missing recipient, subject, or body details. Preserve the "
+            "recipient exactly as supplied; never substitute an address from "
+            "memory or a previous email. Never create a draft with a placeholder "
+            "or incomplete body. Wait until all required fields are supplied, "
+            "read them back, then create exactly one draft for that email "
+            "request. If the user later changes details, update the exact "
+            "created draft ID instead of creating another draft. If a create "
+            "result is uncertain, check Drafts for the matching item before "
+            "considering another create; never blindly retry. Then call this tool "
             "with action='call', tool_name='outlook_create_draft', and "
             "arguments containing to as a list, subject as a string, and body "
             "as a string. Include cc and bcc as lists when provided. Use "
@@ -1532,6 +1540,12 @@ TOOL_DECLARATIONS = [
             "Use outlook_update_draft to revise an existing draft, "
             "outlook_send_draft only after explicit approval, and "
             "outlook_delete_draft only after explicit approval. "
+            "Before requesting approval for an update, state the exact draft "
+            "and every proposed field change, such as the new CC address. "
+            "A phrase that asks to send cannot approve a pending draft update. "
+            "If the user's approval wording names a different action than the "
+            "pending action, execute neither; explain the mismatch and ask the "
+            "user to confirm or cancel the pending action. "
             "Verify completed changes by reading the selected draft again "
             "when appropriate. "
 
@@ -1725,6 +1739,86 @@ SMART_MANUFACTURING_TOOL_DECLARATIONS = [
     }
 ]
 
+OUTLOOK_MAIL_UI_TOOL_DECLARATIONS = [
+    {
+        "name": "outlook_mail_ui",
+        "description": (
+            "Control the visible GHOST Outlook Mail interface for the user's "
+            "voice requests. For an intent to compose or send a new email, "
+            "use action=compose first to open the new-message window; this "
+            "does not send anything. As the user provides recipient, CC, BCC, "
+            "subject, or body details, use action=populate with those exact "
+            "values so they immediately appear in the open compose form. "
+            "Populate never saves or sends. Use action=open with folder=drafts when "
+            "asked to show drafts. For one specific draft, include its exact "
+            "draft_id with action=open to display that message in the panel. Use "
+            "action=edit to open the selected saved draft, and "
+            "pass draft_id when editing a specific draft returned by a recent "
+            "Personal Outlook read. Opening a draft for editing does not save "
+            "changes; ask the user what they want changed. "
+            "action=send to prepare the selected reviewed draft for the normal "
+            "GHOST approval flow. This tool never sends email. Before any send, "
+            "re-read the exact draft, speak its recipients, subject, and full "
+            "body, and obtain the user's separate explicit approval."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "enum": [
+                        "open", "compose", "populate", "edit", "send", "save", "cancel",
+                        "reply", "reply_all", "forward", "archive", "delete",
+                        "refresh",
+                    ],
+                    "description": "The requested visible Outlook Mail action."
+                },
+                "folder": {
+                    "type": "STRING",
+                    "enum": [
+                        "inbox", "drafts", "sentitems", "archive",
+                        "junkemail", "deleteditems",
+                    ],
+                    "description": "Optional folder to display with action=open."
+                },
+                "draft_id": {
+                    "type": "STRING",
+                    "description": (
+                        "Exact ID of the reviewed draft to edit or send, if "
+                        "available from a recent Personal Outlook read."
+                    ),
+                },
+                "to": {
+                    "type": "STRING",
+                    "description": "Exact To recipient text to enter in the open new-compose form.",
+                },
+                "cc": {
+                    "type": "STRING",
+                    "description": "Exact CC recipient text to enter in the open new-compose form.",
+                },
+                "bcc": {
+                    "type": "STRING",
+                    "description": "Exact BCC recipient text to enter in the open new-compose form.",
+                },
+                "subject": {
+                    "type": "STRING",
+                    "description": "Exact subject text to enter in the open new-compose form.",
+                },
+                "body": {
+                    "type": "STRING",
+                    "description": "Exact message body text to enter in the open new-compose form.",
+                },
+            },
+            "required": ["action"],
+        },
+    },
+]
+
+_PERSONAL_OUTLOOK_NON_RETRYABLE_TOOLS = {
+    "outlook_create_draft",
+    "outlook_update_draft",
+    "outlook_send_draft",
+}
 
 
 
@@ -1755,7 +1849,11 @@ class GHOSTLive:
         self._pending_human_action = None
         # Exact Outlook draft content last shown to the user for review.
         self._reviewed_outlook_drafts = {}
+        self._last_reviewed_outlook_draft_id = None
+        self._last_spoken_outlook_recipients = None
+        self._last_outlook_send_status = None
         self._approved_action_running = False
+        self._suppress_confirmation_followup = False
         self.loop_guard     = LoopGuard()
 
         self._smart_manufacturing_handler = None
@@ -1930,6 +2028,7 @@ class GHOSTLive:
         except (TypeError, ValueError):
             return False
         self._reviewed_outlook_drafts[draft_id] = signature
+        self._last_reviewed_outlook_draft_id = draft_id
         # Bound memory use in long-running sessions.
         while len(self._reviewed_outlook_drafts) > 50:
             self._reviewed_outlook_drafts.pop(next(iter(self._reviewed_outlook_drafts)))
@@ -1951,6 +2050,20 @@ class GHOSTLive:
             return parsed_time.timestamp() >= send_started_at - 120
         except (OSError, OverflowError, ValueError):
             return False
+
+    @staticmethod
+    def _extract_spoken_email_addresses(text):
+        addresses = re.findall(
+            r"(?<![\w.+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}",
+            str(text or ""),
+            flags=re.IGNORECASE,
+        )
+        return tuple(dict.fromkeys(address.casefold() for address in addresses))
+
+    def _remember_spoken_outlook_recipients(self, text):
+        addresses = self._extract_spoken_email_addresses(text)
+        if addresses:
+            self._last_spoken_outlook_recipients = addresses
 
     def _mark_human_confirmed(self):
         if (
@@ -2041,6 +2154,9 @@ class GHOSTLive:
     async def _run_approved_pending_action(self):
         from types import SimpleNamespace
 
+        is_outlook_send_draft = False
+        send_draft_id = None
+
         try:
             action = copy.deepcopy(self._pending_human_action)
             token = self._pending_confirmation_token
@@ -2076,6 +2192,7 @@ class GHOSTLive:
                     action.get("args", {}).get("arguments", {}) or {}
                 )
                 selected_draft_id = send_arguments.get("draft_id")
+                send_draft_id = selected_draft_id
 
                 if not isinstance(selected_draft_id, str) or not selected_draft_id.strip():
                     raise RuntimeError(
@@ -2190,6 +2307,14 @@ class GHOSTLive:
 
                 # Start the verification window only after the snapshot is valid.
                 send_verification_started_at = _send_time.time()
+                self._last_outlook_send_status = {
+                    "status": "in_progress",
+                    "draft_id": send_draft_id,
+                    "summary": (
+                        "An approved send is in progress. Do not report success "
+                        "until Sent Items verification completes."
+                    ),
+                }
 
             print(
                 f"[GHOST] Executing locally approved action: "
@@ -2213,10 +2338,35 @@ class GHOSTLive:
             else:
                 result = str(response_data)
 
+            send_tool_error = str(result).strip()
+            is_known_send_rejection = (
+                is_outlook_send_draft
+                and send_tool_error.casefold().startswith(
+                    "personal outlook error:"
+                )
+                and (
+                    "refusequota" in send_tool_error.casefold()
+                    or "daily message/recipient limit exceeded"
+                    in send_tool_error.casefold()
+                )
+            )
+            if is_known_send_rejection:
+                import json as _send_rejection_json
+
+                result = _send_rejection_json.dumps(
+                    {
+                        "status": "rejected",
+                        "message": "Microsoft Graph refused the send request.",
+                        "tool_error": send_tool_error[:1000],
+                    },
+                    ensure_ascii=False,
+                )
+
             # Preserve uncertain send outcomes. A failed tool response does
             # not prove that Microsoft Graph did not complete the send.
             if (
                 is_outlook_send_draft
+                and not is_known_send_rejection
                 and isinstance(response_data, dict)
                 and response_data.get("_tool_ok") is False
             ):
@@ -2248,12 +2398,36 @@ class GHOSTLive:
                         _preview_decode,
                     )
 
-                    send_data = _preview_decode(
-                        result,
-                        "Approved draft send response",
-                    )
+                    try:
+                        send_data = _preview_decode(
+                            result,
+                            "Approved draft send response",
+                        )
+                    except ValueError as send_response_error:
+                        send_data = {
+                            "status": "invalid_response",
+                            "decode_error": str(send_response_error),
+                        }
 
-                    if send_data.get("status") != "sent":
+                    if send_data.get("status") == "rejected":
+                        result = (
+                            str(result)
+                            + "\n\nSENT ITEMS VERIFICATION: skipped; "
+                            "Microsoft Graph refused the send request. "
+                            + str(send_data.get("tool_error") or "")
+                            + " No resend was attempted. Check Sent Items "
+                            "before considering another send."
+                        )
+                    elif send_data.get("status") == "invalid_response":
+                        result = (
+                            str(result)
+                            + "\n\nSENT ITEMS VERIFICATION: skipped; Outlook "
+                            "did not return a valid send status ("
+                            + str(send_data.get("decode_error") or "invalid response")
+                            + "). Check Sent Items manually before retrying. "
+                            "No resend was attempted."
+                        )
+                    elif send_data.get("status") != "sent":
                         result = (
                             str(result)
                             + "\n\nSENT ITEMS VERIFICATION: skipped; "
@@ -2477,6 +2651,7 @@ class GHOSTLive:
                                     "To/CC/BCC recipients, and a recent sent "
                                     "timestamp."
                                 )
+                                self.ui.open_email_client(folder="sentitems")
                             else:
                                 result = (
                                     str(result)
@@ -2505,21 +2680,63 @@ class GHOSTLive:
                         + "\nNo resend was attempted."
                     )
 
+                result_lower = str(result).casefold()
+                if (
+                    "verified: a non-draft sent items message was found"
+                    in result_lower
+                ):
+                    self._record_outlook_send_status(
+                        "sent_verified",
+                        send_draft_id,
+                    )
+                elif is_known_send_rejection:
+                    self._record_outlook_send_status(
+                        "rejected",
+                        send_draft_id,
+                    )
+                else:
+                    self._record_outlook_send_status(
+                        "outcome_unknown",
+                        send_draft_id,
+                    )
+
             # Automatically verify a successfully updated Personal Outlook draft.
             # This is a READ-ONLY operation and does not request another approval.
-            if (
+            is_outlook_draft_update = (
                 action.get("name") == "personal_outlook"
                 and str(action.get("args", {}).get("tool_name", "")).lower()
                     == "outlook_update_draft"
-            ):
+            )
+            is_outlook_draft_update_error = (
+                is_outlook_draft_update
+                and isinstance(result, str)
+                and result.lstrip().startswith("Personal Outlook error:")
+            )
+            if is_outlook_draft_update_error:
+                result += (
+                    "\n\nDRAFT UPDATE VERIFICATION: skipped; Outlook "
+                    "returned an error, so no update was verified. "
+                    "No retry was attempted."
+                )
+
+            if is_outlook_draft_update and not is_outlook_draft_update_error:
                 try:
                     import json as _json
-                    from integrations.personal_outlook_mcp import personal_outlook_action
+                    from integrations.personal_outlook_mcp import (
+                        personal_outlook_action,
+                        _preview_decode,
+                    )
 
-                    update_data = _json.loads(str(result))
+                    update_data = _preview_decode(
+                        result,
+                        "Approved Outlook draft update",
+                    )
                     draft_id = (
                         update_data.get("draft_id")
                         or update_data.get("id")
+                        or (action.get("args", {}).get("arguments") or {}).get(
+                            "draft_id"
+                        )
                     )
 
                     if update_data.get("status") == "updated" and draft_id:
@@ -2537,11 +2754,37 @@ class GHOSTLive:
                             personal_outlook_action,
                             verify_args,
                         )
+                        verified_draft = _preview_decode(
+                            verify_result,
+                            "Updated Outlook draft read-back",
+                        )
+                        if (
+                            verified_draft.get("id") != draft_id
+                            or verified_draft.get("is_draft") is not True
+                        ):
+                            raise ValueError(
+                                "Outlook did not confirm the same item is still a draft."
+                            )
+
+                        self._remember_reviewed_outlook_draft(
+                            draft_id,
+                            verified_draft,
+                        )
+                        if self.ui.open_outlook_draft_by_id(draft_id):
+                            self.ui.write_log(
+                                "SYS: Updated Outlook draft was verified and reopened in the mail panel."
+                            )
+                        else:
+                            result = (
+                                str(result)
+                                + "\nThe update was verified, but the draft "
+                                "could not be reopened in the mail panel."
+                            )
 
                         result = (
                             str(result)
                             + "\n\n--- READ-ONLY DRAFT VERIFICATION ---\n"
-                            + str(verify_result)
+                            + _json.dumps(verified_draft, ensure_ascii=False)
                         )
                     else:
                         result = (
@@ -2568,6 +2811,18 @@ class GHOSTLive:
             # a contradictory response after the approved action completes.
 
         finally:
+            last_send_status = getattr(
+                self, "_last_outlook_send_status", None
+            )
+            if (
+                is_outlook_send_draft
+                and isinstance(last_send_status, dict)
+                and last_send_status.get("status") == "in_progress"
+            ):
+                self._record_outlook_send_status(
+                    "outcome_unknown",
+                    send_draft_id,
+                )
             self._pending_human_action = None
             self._pending_human_fingerprint = None
             self._approved_human_fingerprint = None
@@ -2576,21 +2831,79 @@ class GHOSTLive:
             self._human_confirmed = False
             self._approved_action_running = False
 
+    async def _process_live_tool_calls(self, function_calls):
+        fn_responses = []
+        for fc in function_calls:
+            if self._suppress_confirmation_followup:
+                fn_responses.append(
+                    types.FunctionResponse(
+                        id=fc.id,
+                        name=fc.name,
+                        response={
+                            "result": (
+                                "The user's approval was already accepted and "
+                                "the approved action is being executed locally. "
+                                "Do not repeat the action or ask for approval again."
+                            )
+                        },
+                    )
+                )
+            else:
+                fn_responses.append(await self._execute_tool(fc))
+
+        await self.session.send_tool_response(
+            function_responses=fn_responses
+        )
+
     def _handle_confirmation_text(self, text: str):
-        normalized = re.sub(
-            r"[^\w\s]", "", (text or "").lower()
+        import unicodedata
+
+        normalized = "".join(
+            character
+            for character in (text or "").casefold()
+            if character.isspace()
+            or unicodedata.category(character)[0] in {"L", "M", "N"}
         )
         normalized = " ".join(normalized.split())
 
         affirmative = {
             "yes", "yeah", "yep", "sure", "ok", "okay",
-            "proceed", "approve", "yes send it", "yes go ahead",
-            "ha", "?????", "??", "??? ???"
+            "proceed", "approve", "yes go ahead",
+            "ha", "hya", "haan",
+            "হ্যাঁ", "হ্যা", "জি", "জী", "ঠিক আছে",
+            "अनुमति है", "मंजूर है", "हाँ", "हां", "जी", "ठीक है",
+        }
+
+        send_approval = {
+            "send", "send it", "send draft", "send this draft", "send the draft",
+            "yes send it", "yes send the draft", "yes send this draft",
+            "haan bhej do", "han bhej do", "bhej do",
+            "হ্যাঁ পাঠাও", "হ্যাঁ পাঠিয়ে দাও", "হ্যাঁ পাঠিয়ে দাও",
+            "হ্যাঁ পাঠায় দাও", "হ্যাঁ পাঠায় দাও", "পাঠাও",
+            "পাঠিয়ে দাও", "পাঠিয়ে দাও", "পাঠায় দাও", "পাঠায় দাও",
+            "हाँ भेज दो", "हां भेज दो", "हाँ भेजो", "भेज दो",
+        }
+
+        update_approval = {
+            "change it", "yes change it", "update it", "yes update it",
+            "edit it", "yes edit it", "save changes",
+            "yes you can", "yes do it", "go ahead and change it",
+            "করো", "করে দাও", "পরিবর্তন করো", "পরিবর্তন করুন",
+            "হ্যাঁ করো", "হ্যাঁ পরিবর্তন করো", "হ্যাঁ করতে পারো",
+            "হ্যাঁ করে দাও", "করতে পারো", "করুন",
+            "koro", "coro", "kore dao",
+            "बदल दो", "बदल दीजिए", "हाँ बदल दो", "हां बदल दो",
+            "कर दो", "हाँ कर दो", "हां कर दो", "ठीक है बदल दो",
+            "हाँ कर सकते हो", "हां कर सकते हो", "हाँ कर सकते हैं",
+            "हां कर सकते हैं", "हाँ कर दीजिए", "हां कर दीजिए",
         }
 
         negative = {
             "no", "nope", "nah", "cancel", "stop",
-            "??", "???"
+            "না", "নাহ", "বাতিল", "পাঠিও না", "না পাঠিও না",
+            "পাঠাবেন না", "না পাঠাবেন না",
+            "नहीं", "ना", "रद्द", "मत भेजो", "नहीं भेजो",
+            "नहीं भेजना", "न भेजो", "रोक दो",
         }
 
         can_cancel = (
@@ -2608,6 +2921,42 @@ class GHOSTLive:
             f"approved={self._approved_human_fingerprint is not None}, "
             f"running={self._approved_action_running}"
         )
+
+        if self._awaiting_human_confirmation and (
+            normalized in send_approval or normalized in update_approval
+        ):
+            pending = self._pending_human_action or {}
+            pending_args = pending.get("args") or {}
+            pending_tool = str(pending_args.get("tool_name") or "").casefold()
+            pending_is_send = (
+                pending.get("name") == "personal_outlook"
+                and pending_tool == "outlook_send_draft"
+            )
+            pending_is_update = (
+                pending.get("name") == "personal_outlook"
+                and pending_tool == "outlook_update_draft"
+            )
+
+            if normalized in send_approval and pending_is_send:
+                return self._mark_human_confirmed()
+            if normalized in update_approval and pending_is_update:
+                return self._mark_human_confirmed()
+
+            mismatch = (
+                "send" if normalized in send_approval else "change"
+            )
+            pending_kind = (
+                "a draft send" if pending_is_send
+                else "a draft update" if pending_is_update
+                else "a different action"
+            )
+            self.ui.write_log(
+                "SYS: That approval refers to "
+                f"{mismatch}, but the pending confirmation is for "
+                f"{pending_kind}. Nothing was executed. Confirm or cancel "
+                "the pending action explicitly."
+            )
+            return False
 
         if normalized in affirmative and self._awaiting_human_confirmation:
             return self._mark_human_confirmed()
@@ -2632,17 +2981,37 @@ class GHOSTLive:
         if self._handle_confirmation_text(text):
             return True
 
+        self._remember_spoken_outlook_recipients(text)
         email_command = parse_email_client_command(text)
         if email_command:
             action = email_command["action"]
-            if action == "compose":
+            if action in {
+                "edit", "send", "save", "cancel", "reply", "reply_all",
+                "forward", "archive", "delete", "refresh",
+            }:
+                if self.ui.handle_email_voice_command(action):
+                    self.ui.write_log(f"SYS: Outlook voice command accepted: {action}.")
+                    return True
+            elif action == "compose":
+                self._last_spoken_outlook_recipients = (
+                    self._extract_spoken_email_addresses(text) or None
+                )
                 self.ui.open_email_client(compose=True)
+                self.ui.write_log("SYS: New Outlook email compose opened.")
+                return True
             elif email_command.get("folder"):
                 self.ui.open_email_client(folder=email_command["folder"])
-            else:
+                self.ui.write_log(
+                    f"SYS: Outlook {email_command['folder']} folder opened."
+                )
+                return True
+            elif action == "open":
                 self.ui.open_email_client()
-            self.ui.write_log("SYS: Outlook mail workspace opened.")
-            return True
+                self.ui.write_log("SYS: Outlook mail workspace opened.")
+                return True
+            else:
+                self.ui.write_log("SYS: New Outlook email compose opened.")
+                return True
 
         if not self._loop or not self.session or not self._send_lock:
             return False
@@ -2710,14 +3079,14 @@ class GHOSTLive:
         with self._phase_lock:
             return self._phase
 
-    def _schedule_session_reload(self):
+    def _schedule_session_reload(self, delay: float = 2.5):
         """Mode/voice changed ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â close the live session shortly so run() reconnects
         and re-applies the system prompt / speech config from memory."""
         if not self._loop or not self.session:
             return
 
         async def _reload_soon():
-            await asyncio.sleep(2.5)
+            await asyncio.sleep(delay)
             try:
                 await self.session.close()
             except Exception:
@@ -2739,6 +3108,36 @@ class GHOSTLive:
         while self._rolling_len > MAX_ROLLING_CHARS and self._rolling_parts:
             old = self._rolling_parts.pop(0)
             self._rolling_len -= len(old)
+
+    def _record_outlook_send_status(self, status: str, draft_id=None):
+        summaries = {
+            "in_progress": (
+                "An approved send is in progress. Do not report success until "
+                "Sent Items verification completes."
+            ),
+            "sent_verified": (
+                "The email was sent and verified in Sent Items using its "
+                "recipients, subject, and sent timestamp."
+            ),
+            "rejected": (
+                "Microsoft Graph refused the send because of the account's "
+                "daily message/recipient limit. Sent Items verification was "
+                "skipped. Do not claim it was sent or retry until the limit "
+                "issue is resolved."
+            ),
+            "outcome_unknown": (
+                "The send outcome could not be verified. Do not claim it was "
+                "sent or failed, and do not retry. Check Sent Items first."
+            ),
+        }
+        summary = summaries[status]
+        self._last_outlook_send_status = {
+            "status": status,
+            "draft_id": draft_id,
+            "summary": summary,
+        }
+        self._update_rolling("", f"Outlook send status: {summary}")
+        self._schedule_session_reload(delay=0.1)
 
     def _rolling_digest(self, limit: int = 1400) -> str:
         """Flatten the recent-context buffer into the prompt-able string."""
@@ -2919,6 +3318,149 @@ class GHOSTLive:
                 value=args.get("value"),
             )
 
+        def _outlook_mail_ui(args):
+            action = str(args.get("action") or "").strip().casefold()
+            requested_draft_id = args.get("draft_id")
+            folders = {
+                "inbox", "drafts", "sentitems", "archive",
+                "junkemail", "deleteditems",
+            }
+            if action == "open":
+                folder = str(args.get("folder") or "").strip().casefold()
+                if folder and folder not in folders:
+                    return "Unsupported Outlook folder. Choose a listed mailbox folder."
+                if requested_draft_id:
+                    if (
+                        not isinstance(requested_draft_id, str)
+                        or not requested_draft_id.strip()
+                    ):
+                        return "The requested Outlook message ID is invalid."
+                    if not ui.open_outlook_draft_by_id(requested_draft_id):
+                        return "Could not open that exact Outlook draft in the mail panel."
+                    return "Opening the exact selected draft in the GHOST Outlook Mail panel."
+                ui.open_email_client(folder=folder or None)
+                return f"Opening the GHOST Outlook Mail {folder or 'inbox'} view."
+            if action == "compose":
+                self._last_spoken_outlook_recipients = None
+                ui.open_email_client(compose=True)
+                return "Opening a new Outlook compose window. No email has been sent."
+            if action == "populate":
+                updates = {
+                    field: args[field]
+                    for field in ("to", "cc", "bcc", "subject", "body")
+                    if field in args
+                }
+                if not updates:
+                    return "Provide at least one exact field value to enter."
+                if not ui.update_open_compose_fields(updates):
+                    return (
+                        "Could not enter those values in a new compose window. "
+                        "No draft was saved or sent."
+                    )
+                return (
+                    "Entered the provided values in the visible new-email form. "
+                    "No draft was saved or sent."
+                )
+            if action == "edit":
+                draft_id = (
+                    requested_draft_id
+                    or getattr(self, "_last_reviewed_outlook_draft_id", None)
+                )
+                if draft_id:
+                    if not isinstance(draft_id, str) or not draft_id.strip():
+                        return "The selected draft ID is invalid; no draft was opened."
+                    if draft_id not in self._reviewed_outlook_drafts:
+                        return (
+                            "That draft has not been reviewed in this session. "
+                            "Read the exact draft in Personal Outlook before editing it."
+                        )
+                    if not ui.open_outlook_draft_for_edit(draft_id):
+                        return "Could not open the exact reviewed draft in the editor."
+                    return (
+                        "Opening the exact reviewed draft in the Outlook editor. "
+                        "No changes have been saved or sent; ask the user what to change."
+                    )
+                if not ui.handle_email_voice_command("edit"):
+                    return "No saved draft is selected to edit."
+                return (
+                    "The selected Outlook draft is being opened for editing. "
+                    "No changes have been saved or sent; ask the user what to change."
+                )
+            if action not in {
+                "send", "save", "cancel", "reply", "reply_all",
+                "forward", "archive", "delete", "refresh",
+            }:
+                return "Unsupported Outlook Mail UI action."
+
+            if action == "send":
+                compose_mode = getattr(ui, "_email_compose_mode", None)
+                if compose_mode in {"new", "reply", "reply_all", "forward"}:
+                    if not ui.handle_email_voice_command("send"):
+                        return "The open compose form could not be submitted."
+                    return (
+                        "The visible compose form is being saved as a draft and "
+                        "submitted for GHOST's normal approval flow. No email "
+                        "has been sent yet."
+                    )
+                if compose_mode:
+                    return (
+                        "Finish and approve the current draft edit before requesting "
+                        "a send. No email was sent."
+                    )
+                snapshot = None
+                draft_id = (
+                    requested_draft_id
+                    or getattr(self, "_last_reviewed_outlook_draft_id", None)
+                )
+                if not draft_id:
+                    snapshot = ui.get_selected_outlook_draft_snapshot()
+                    draft_id = snapshot.get("id") if snapshot else None
+                if not isinstance(draft_id, str) or not draft_id.strip():
+                    ui.open_email_client(folder="drafts")
+                    return (
+                        "No reviewed draft is selected. Drafts has been opened; "
+                        "read and review the exact draft before requesting a send. "
+                        "No email was sent."
+                    )
+                reviewed_signature = self._reviewed_outlook_drafts.get(draft_id)
+                if reviewed_signature is None:
+                    return (
+                        "The selected draft has not been fully reviewed by GHOST. "
+                        "Read the exact draft in Personal Outlook before requesting a send."
+                    )
+                if snapshot and snapshot.get("id") == draft_id:
+                    try:
+                        signature = self._outlook_draft_review_signature(snapshot)
+                    except (TypeError, ValueError) as exc:
+                        return f"The selected draft is incomplete and cannot be sent: {exc}"
+                    if reviewed_signature != signature:
+                        return (
+                            "The selected draft changed after it was reviewed. "
+                            "Read it again before requesting a send."
+                        )
+                if not ui.open_outlook_draft_by_id(draft_id):
+                    return (
+                        "Could not open the exact reviewed draft in the Outlook "
+                        "Mail panel. No email was sent."
+                    )
+                return json.dumps({
+                    "status": "approval_required",
+                    "draft_id": draft_id,
+                    "subject": snapshot.get("subject", "") if snapshot else "",
+                    "next_step": (
+                        "Re-read this exact draft with Personal Outlook, speak its "
+                        "complete To, CC, BCC, subject, and body, then ask for separate "
+                        "explicit approval. Do not send before the user approves."
+                    ),
+                }, ensure_ascii=False)
+
+            if not ui.handle_email_voice_command(action):
+                return "The Outlook Mail UI could not handle that action."
+            return (
+                f"Outlook Mail action '{action}' was requested. Do not claim it "
+                "changed or sent a message until GHOST confirms the result."
+            )
+
         def _lazy(mod, fn, *extra_args, **extra_kwargs):
             import importlib
             m = importlib.import_module(mod)
@@ -3063,6 +3605,7 @@ class GHOSTLive:
             "create_presentation": (_office_pptx, 60),
             "create_spreadsheet":  (_office_xlsx, 60),
             "smart_home_control":  (_smart_home, 30),
+            "outlook_mail_ui":    (_outlook_mail_ui, 15),
             "smart_manufacturing": (_smart_manufacturing, 90),
         }
 
@@ -3218,8 +3761,11 @@ class GHOSTLive:
             name,
             timeout=timeout,
             attempts=(
-                1 if name == "personal_outlook"
-                and str(args.get("tool_name", "")).strip() == "outlook_send_draft"
+                1 if name == "personal_outlook" and (
+                    requires_confirmation
+                    or str(args.get("tool_name", "")).strip()
+                        in _PERSONAL_OUTLOOK_NON_RETRYABLE_TOOLS
+                )
                 else 3
             ),
         )
@@ -3262,13 +3808,88 @@ class GHOSTLive:
             parts.append(mem_str)
         parts.append(style_ctx)
         parts.append(sys_prompt)
+        parts.append(
+            "[OUTLOOK MAIL VOICE COMMANDS]\n"
+            "When the user says they want to write, compose, or send a new "
+            "email (including in Bengali or Hindi), immediately call "
+            "outlook_mail_ui with action=compose before asking for recipient, "
+            "subject, or body details. Opening the composer does not create "
+            "or send a message. Distinguish this from a request to send an "
+            "existing draft. "
+            "For a voice-dictated recipient, repeat the exact email address "
+            "and get confirmation before creating the draft; never silently "
+            "guess or normalize an address. "
+            "When the user asks to show/open Inbox, Drafts, or Sent Items, use "
+            "the outlook_mail_ui tool to open that visible folder. For voice "
+            "commands such as edit, save, reply, or send, use outlook_mail_ui "
+            "to operate the visible Outlook panel. A send request must never "
+            "send directly: re-read the selected draft, state its complete "
+            "recipients, subject, and body aloud, then ask for separate "
+            "explicit approval and follow the existing Outlook safety flow. "
+            "For a new voice-composed email, use outlook_mail_ui action=populate "
+            "after each recipient, subject, or body detail so it is entered "
+            "into the visible form immediately. Preserve previously entered "
+            "fields when updating only one field. Do not call "
+            "outlook_create_draft directly while that compose form is open. "
+            "When the user requests sending from the new compose form, use "
+            "outlook_mail_ui action=send to save it once and enter the normal "
+            "approval flow; do not send until the separate approval. "
+            "If a send result confirms status=sent and Sent Items verification, "
+            "never later describe that same send as failed or suggest retrying "
+            "it. For an unclear follow-up, ask what the user means and preserve "
+            "the confirmed send status. "
+            "After the user requests sending a selected draft, keep that exact "
+            "draft displayed in the panel so the visible Send via GHOST control "
+            "is available. Do not click or invoke the send operation until the "
+            "separate approval is received. "
+            "If the user says only to edit/open a draft without specifying "
+            "changes, open the exact most recently read draft in the editor "
+            "(pass its ID when available) and ask what to change. Do not call "
+            "outlook_update_draft until the user specifies the desired changes; "
+            "opening an editor is not permission to update or send. When the "
+            "user asks to show one specific draft in the Outlook panel, pass "
+            "that draft's exact ID with action=open; opening the Drafts folder "
+            "alone does not display the requested message. When the editor "
+            "submits a Save Changes request with exact values, call the "
+            "outlook_update_draft tool once to invoke the existing explicit "
+            "approval gate. Do not substitute a refresh, claim the draft was "
+            "saved before approval, or retry the update. If an update fails, "
+            "report the actual result and do not offer to retry. After approval, "
+            "report "
+            "the verified result and show the updated draft in the mail panel. "
+            "Never ask whether to retry a send or suggest sending manually. "
+            "After a send error or uncertain result, explain the known outcome, "
+            "direct the user to check Sent Items, and do not retry. Treat 'hmm' "
+            "or 'hum' as unclear, never as send approval; ask for clarification. "
+            "Accept clear Bengali or Hindi affirmative "
+            "approval responses when the confirmation gate is pending.\n"
+        )
+        last_send_status = getattr(
+            self, "_last_outlook_send_status", None
+        )
+        if (
+            isinstance(last_send_status, dict)
+            and last_send_status.get("summary")
+        ):
+            parts.append(
+                "[AUTHORITATIVE OUTLOOK SEND OUTCOME]\n"
+                + str(last_send_status["summary"])
+                + " This status overrides guesses or earlier conversational "
+                "claims about that send. Do not contradict it.\n"
+            )
 
         return types.LiveConnectConfig(
             response_modalities=["AUDIO"],
             output_audio_transcription={},
             input_audio_transcription={},
             system_instruction="\n".join(parts),
-            tools=[{"function_declarations": TOOL_DECLARATIONS + SMART_MANUFACTURING_TOOL_DECLARATIONS}],
+            tools=[{
+                "function_declarations": (
+                    TOOL_DECLARATIONS
+                    + OUTLOOK_MAIL_UI_TOOL_DECLARATIONS
+                    + SMART_MANUFACTURING_TOOL_DECLARATIONS
+                )
+            }],
             session_resumption=types.SessionResumptionConfig(),
             context_window_compression=types.ContextWindowCompressionConfig(
                 sliding_window=types.SlidingWindow()
@@ -3298,6 +3919,63 @@ class GHOSTLive:
         self.ui.set_state("THINKING")
 
         # ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ save_memory: sessiz, hÃƒâ€žÃ‚Â±zlÃƒâ€žÃ‚Â±, Gemini'ye bildirim yok ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
+        is_voice_compose_recipient = (
+            name == "outlook_mail_ui"
+            and str(args.get("action", "")).strip().casefold() == "populate"
+            and "to" in args
+        )
+        is_api_draft_recipient = (
+            name == "personal_outlook"
+            and str(args.get("tool_name", "")).strip()
+                == "outlook_create_draft"
+        )
+        if is_voice_compose_recipient or is_api_draft_recipient:
+            spoken_recipients = getattr(
+                self, "_last_spoken_outlook_recipients", None
+            )
+            draft_arguments = args.get("arguments") or {}
+            to_values = args.get("to") if is_voice_compose_recipient else draft_arguments.get("to")
+            if isinstance(to_values, str):
+                to_values = [to_values]
+            requested_recipients = tuple(
+                dict.fromkeys(
+                    address
+                    for item in (to_values if isinstance(to_values, list) else [])
+                    for address in self._extract_spoken_email_addresses(
+                        item.get("email", "") if isinstance(item, dict) else item
+                    )
+                )
+            )
+            if (
+                isinstance(spoken_recipients, tuple)
+                and len(spoken_recipients) == 1
+                and len(requested_recipients) == 1
+                and spoken_recipients[0] != requested_recipients[0]
+            ):
+                if is_voice_compose_recipient:
+                    message = (
+                        "Recipient entry blocked: the address spoken by the "
+                        f"user was {spoken_recipients[0]}, but the compose "
+                        f"request used {requested_recipients[0]}. No value was "
+                        "entered. Read the exact address back and ask the user "
+                        "to repeat or correct it."
+                    )
+                else:
+                    message = (
+                        "Draft creation blocked: the address spoken by the "
+                        f"user was {spoken_recipients[0]}, but the draft "
+                        f"request used {requested_recipients[0]}. No draft was "
+                        "created. Read the exact address back and ask the user "
+                        "to repeat or correct it."
+                    )
+                self.ui.write_log(f"ERR: {message}")
+                self.ui.set_state("LISTENING")
+                return types.FunctionResponse(
+                    id=fc.id,
+                    name=name,
+                    response={"result": message},
+                )
+
         if name == "save_memory":
             category = args.get("category", "notes")
             key      = args.get("key", "")
@@ -3544,8 +4222,11 @@ class GHOSTLive:
                     name,
                     timeout=timeout,
                     attempts=(
-                        1 if name == "personal_outlook"
-                        and str(args.get("tool_name", "")).strip() == "outlook_send_draft"
+                        1 if name == "personal_outlook" and (
+                            requires_confirmation
+                            or str(args.get("tool_name", "")).strip()
+                                in _PERSONAL_OUTLOOK_NON_RETRYABLE_TOOLS
+                        )
                         else 3
                     ),
                 )
@@ -3651,6 +4332,19 @@ class GHOSTLive:
                                 except (ValueError, TypeError):
                                     reviewed_draft_id = None
                             self._remember_reviewed_outlook_draft(reviewed_draft_id, draft)
+                            if str(args.get("tool_name", "")).strip() == "outlook_create_draft":
+                                self._last_spoken_outlook_recipients = None
+                                if (
+                                    reviewed_draft_id
+                                    and not self.ui.show_created_outlook_draft(
+                                        reviewed_draft_id
+                                    )
+                                ):
+                                    self.ui.write_log(
+                                        "ERR: The verified Outlook draft was saved, "
+                                        "but the mail panel could not display it. "
+                                        "No additional draft was created."
+                                    )
 
                             def _recipient_text(items):
                                 if not items:
@@ -4232,13 +4926,41 @@ class GHOSTLive:
                 print("[GHOST] ÃƒÂ¢Ã‚ÂÃ‚Â± Speaking watchdog fired ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â force-cleared")
                 self.set_speaking(False)
 
+    def _release_audio_turn(self, audio_chunks):
+        if (
+            audio_chunks
+            and not self._suppress_confirmation_followup
+            and not getattr(self.ui, "silent_mode", False)
+            and self.audio_in_queue is not None
+        ):
+            for chunk in audio_chunks:
+                self.audio_in_queue.put_nowait(chunk)
+        audio_chunks.clear()
+
     async def _receive_audio(self):
         print("[GHOST] ÃƒÂ°Ã…Â¸Ã¢â‚¬ËœÃ¢â‚¬Å¡ Recv started")
-        out_buf, in_buf = [], []
+        out_buf, in_buf, audio_buf = [], [], []
 
         try:
             while True:
                 async for response in self.session.receive():
+                    incoming_server_content = getattr(
+                        response, "server_content", None
+                    )
+                    incoming_transcription = getattr(
+                        getattr(
+                            incoming_server_content,
+                            "input_transcription",
+                            None,
+                        ),
+                        "text",
+                        "",
+                    )
+                    if (
+                        self._suppress_confirmation_followup
+                        and incoming_transcription
+                    ):
+                        self._suppress_confirmation_followup = False
 
                     sc_debug = getattr(response, "server_content", None)
                     model_debug = getattr(sc_debug, "model_turn", None)
@@ -4254,8 +4976,12 @@ class GHOSTLive:
                         f"tool_call={getattr(response, 'tool_call', None) is not None}"
                     )
 
-                    if response.data and not getattr(self.ui, "silent_mode", False):
-                        self.audio_in_queue.put_nowait(response.data)
+                    if (
+                        response.data
+                        and not getattr(self.ui, "silent_mode", False)
+                        and not self._suppress_confirmation_followup
+                    ):
+                        audio_buf.append(response.data)
 
                     if response.server_content:
                         sc = response.server_content
@@ -4266,7 +4992,10 @@ class GHOSTLive:
                             getattr(output_transcription, "text", "") or ""
                         ).strip()
 
-                        if transcription_text:
+                        if (
+                            transcription_text
+                            and not self._suppress_confirmation_followup
+                        ):
                             if not getattr(self.ui, "silent_mode", False):
                                 self.set_speaking(True)
                             out_buf.append(transcription_text)
@@ -4276,7 +5005,10 @@ class GHOSTLive:
                         model_turn = getattr(sc, "model_turn", None)
                         model_parts = getattr(model_turn, "parts", None) or []
 
-                        if not transcription_text:
+                        if (
+                            not transcription_text
+                            and not self._suppress_confirmation_followup
+                        ):
                             for part in model_parts:
                                 part_text = (getattr(part, "text", "") or "").strip()
                                 if part_text:
@@ -4291,21 +5023,67 @@ class GHOSTLive:
                             self._turn_complete = True
 
                             full_in = " ".join(in_buf).strip()
+                            confirmation_consumed = False
                             if full_in:
+                                confirmation_was_pending = (
+                                    self._awaiting_human_confirmation
+                                )
                                 self.ui.write_log(f"You: {full_in}")
-                                self._handle_confirmation_text(full_in)
+                                self._remember_spoken_outlook_recipients(
+                                    full_in
+                                )
+                                confirmation_consumed = (
+                                    self._handle_confirmation_text(full_in)
+                                )
+                                if not confirmation_consumed:
+                                    email_command = parse_email_client_command(
+                                        full_in
+                                    )
+                                    if email_command and email_command.get(
+                                        "action"
+                                    ) == "compose":
+                                        self._on_text_command(full_in)
+                                if confirmation_consumed or confirmation_was_pending:
+                                    self._suppress_confirmation_followup = True
+                                    if self.audio_in_queue is not None:
+                                        while True:
+                                            try:
+                                                self.audio_in_queue.get_nowait()
+                                            except asyncio.QueueEmpty:
+                                                break
+                                    if (
+                                        confirmation_was_pending
+                                        and not confirmation_consumed
+                                    ):
+                                        self.ui.write_log(
+                                            "SYS: I did not detect a clear approval. "
+                                            "Nothing was executed; say yes to approve "
+                                            "or no to cancel."
+                                        )
                             in_buf = []
 
                             full_out = " ".join(out_buf).strip()
-                            if full_out:
+                            if full_out and not (
+                                confirmation_consumed
+                                or self._suppress_confirmation_followup
+                            ):
                                 self.ui.write_log(f"GHOST: {full_out}")
                             out_buf = []
 
+                            if not (
+                                confirmation_consumed
+                                or self._suppress_confirmation_followup
+                            ):
+                                self._update_rolling(full_in, full_out)
 
-
-                            self._update_rolling(full_in, full_out)
-
-                            if full_in and len(full_in) > 5:
+                            if (
+                                full_in
+                                and len(full_in) > 5
+                                and not (
+                                    confirmation_consumed
+                                    or self._suppress_confirmation_followup
+                                )
+                            ):
                                 threading.Thread(
                                     target=_update_memory_async,
                                     args=(full_in, full_out),
@@ -4319,14 +5097,14 @@ class GHOSTLive:
                             if n_turns >= 10:
                                 self._persist_rolling_summary()
 
+                            self._release_audio_turn(audio_buf)
+
                     if response.tool_call:
-                        fn_responses = []
-                        for fc in response.tool_call.function_calls:
-                            print(f"[GHOST] ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã…Â¾ {fc.name}")
-                            fr = await self._execute_tool(fc)
-                            fn_responses.append(fr)
-                        await self.session.send_tool_response(
-                            function_responses=fn_responses
+                        if not self._suppress_confirmation_followup:
+                            for fc in response.tool_call.function_calls:
+                                print(f"[GHOST] ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã…Â¾ {fc.name}")
+                        await self._process_live_tool_calls(
+                            response.tool_call.function_calls
                         )
                         # ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ BoÃƒâ€¦Ã…Â¸ turn YOK ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â bu "AnladÃƒâ€žÃ‚Â±m." sorununu yaratÃƒâ€žÃ‚Â±yordu ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -121,6 +122,124 @@ class PersonalOutlookDispatchTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_approved_outlook_draft_mutations_are_never_retried(self):
+        for dispatch_path in ("_dispatch_tool", "_execute_tool"):
+            for tool_name in ("outlook_create_draft", "outlook_update_draft"):
+                with self.subTest(path=dispatch_path, tool=tool_name):
+                    live = main.GHOSTLive(MagicMock())
+                    args = {
+                        "action": "call",
+                        "tool_name": tool_name,
+                        "arguments": {
+                            "draft_id": "draft-123",
+                            "to": ["recipient@example.com"],
+                            "subject": "Test",
+                            "body": "Body",
+                        },
+                    }
+                    fingerprint = _fingerprint("personal_outlook", args)
+                    token = issue_confirmation_token("personal_outlook", args)
+                    live._approved_human_fingerprint = fingerprint
+                    live._pending_confirmation_token = token
+                    attempts = []
+
+                    async def run_once(_handler, _name, **kwargs):
+                        attempts.append(kwargs["attempts"])
+                        return main.ToolResult(
+                            ok=False,
+                            content="mock failure",
+                            error_kind="timeout",
+                            duration_s=0,
+                            retries=0,
+                            silent=False,
+                        )
+
+                    async def run():
+                        patch_target = (
+                            "main.run_sync_tool"
+                            if dispatch_path == "_dispatch_tool"
+                            else "agent.resilience.run_sync_tool"
+                        )
+                        with patch(patch_target, new=run_once):
+                            approved_args = {
+                                **args,
+                                "confirm": True,
+                                "confirm_token": token,
+                            }
+                            if dispatch_path == "_dispatch_tool":
+                                await live._dispatch_tool(
+                                    "personal_outlook",
+                                    approved_args,
+                                )
+                            else:
+                                await live._execute_tool(SimpleNamespace(
+                                    id="update-retry-test",
+                                    name="personal_outlook",
+                                    args=approved_args,
+                                ))
+
+                    asyncio.run(run())
+                    self.assertEqual(attempts, [1])
+
+    def test_approved_draft_update_is_read_back_and_reopened_in_mail_panel(self):
+        live = object.__new__(main.GHOSTLive)
+        live.ui = MagicMock()
+        live._reviewed_outlook_drafts = {}
+        live._last_reviewed_outlook_draft_id = None
+        live._pending_human_action = {
+            "name": "personal_outlook",
+            "args": {
+                "action": "call",
+                "tool_name": "outlook_update_draft",
+                "arguments": {
+                    "draft_id": "draft-123",
+                    "subject": "Updated subject",
+                    "body": "Updated body",
+                },
+            },
+        }
+        live._pending_confirmation_token = "approved-token"
+        verified_draft = {
+            "id": "draft-123",
+            "is_draft": True,
+            "subject": "Updated subject",
+            "body": "Updated body",
+            "to_available": True,
+            "to": [{"email": "recipient@example.com"}],
+            "cc_available": True,
+            "cc": [],
+            "bcc_available": True,
+            "bcc": [],
+        }
+
+        async def execute_update(*_args, **_kwargs):
+            return SimpleNamespace(response={
+                "result": json.dumps({
+                    "status": "updated",
+                    "draft_id": "draft-123",
+                })
+            })
+
+        live._execute_tool = execute_update
+
+        async def run():
+            with patch.object(
+                outlook,
+                "personal_outlook_action",
+                return_value=json.dumps(verified_draft),
+            ) as read_back:
+                await live._run_approved_pending_action()
+
+            read_back.assert_called_once()
+            self.assertEqual(
+                read_back.call_args.args[0]["arguments"]["message_id"],
+                "draft-123",
+            )
+            live.ui.open_outlook_draft_by_id.assert_called_once_with("draft-123")
+            self.assertIn("draft-123", live._reviewed_outlook_drafts)
+
+        asyncio.run(run())
+
 
     def test_voice_blocks_dispatch_while_approved_action_running(self):
         live = main.GHOSTLive(MagicMock())
@@ -216,6 +335,37 @@ class PersonalOutlookDispatchTests(unittest.TestCase):
             self.assertIsNone(live._approved_human_fingerprint)
 
         asyncio.run(run())
+
+    def test_consumed_voice_approval_does_not_execute_gemini_followup_tool(self):
+        live = main.GHOSTLive(MagicMock())
+        live._suppress_confirmation_followup = True
+        responses = []
+        executions = []
+
+        class FakeSession:
+            async def send_tool_response(self, function_responses):
+                responses.extend(function_responses)
+
+        async def execute_tool(function_call):
+            executions.append(function_call)
+
+        live.session = FakeSession()
+        live._execute_tool = execute_tool
+        function_call = SimpleNamespace(
+            id="duplicate-call",
+            name="personal_outlook",
+            args=self._args(),
+        )
+
+        asyncio.run(live._process_live_tool_calls([function_call]))
+
+        self.assertEqual(executions, [])
+        self.assertEqual(len(responses), 1)
+        self.assertEqual(responses[0].id, "duplicate-call")
+        self.assertIn(
+            "already accepted",
+            responses[0].response["result"].lower(),
+        )
 
 
     def test_telegram_pending_approval_blocks_different_voice_action(self):

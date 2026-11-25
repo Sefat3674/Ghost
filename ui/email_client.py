@@ -5,6 +5,7 @@ import re
 import threading
 import tkinter as tk
 from tkinter import ttk
+import unicodedata
 
 
 _FOLDERS = (
@@ -84,7 +85,14 @@ def _folder_key(value):
 
 
 def parse_email_client_command(command):
-    normalized = re.sub(r"[^a-z0-9]+", " ", str(command or "").casefold()).strip()
+    normalized = "".join(
+        character
+        if character.isspace()
+        or unicodedata.category(character)[0] in {"L", "M", "N"}
+        else " "
+        for character in str(command or "").casefold()
+    )
+    normalized = " ".join(normalized.split())
     for prefix in ("ghost please ", "please ", "ghost "):
         if normalized.startswith(prefix):
             normalized = normalized[len(prefix):]
@@ -102,7 +110,9 @@ def parse_email_client_command(command):
             "open outlook mail drafts",
             "open email drafts",
             "show draft",
+            "show latest draft",
             "show drafts",
+            "show latest drafts",
             "show me drafts",
             "show my drafts",
             "show outlook draft",
@@ -145,6 +155,26 @@ def parse_email_client_command(command):
     if normalized in {
         "new email",
         "new mail",
+        "i want to send a mail",
+        "i want to send mail",
+        "i want to send an email",
+        "i want to send email",
+        "i need to send a mail",
+        "i need to send an email",
+        "i would like to send a mail",
+        "i would like to send an email",
+        "मैं एक मेल भेजना चाहता हूं",
+        "मैं एक मेल भेजना चाहती हूं",
+        "मुझे एक मेल भेजना है",
+        "एक मेल भेजना है",
+        "एक मेल भेजना होगा",
+        "मुझे एक ईमेल भेजना है",
+        "আমি একটা মেইল পাঠাতে চাই",
+        "আমি একটি মেইল পাঠাতে চাই",
+        "একটা মেইল পাঠাতে চাই",
+        "একটি মেইল পাঠাতে চাই",
+        "আমাকে একটা মেইল পাঠাতে হবে",
+        "আমি একটা ইমেইল পাঠাতে চাই",
         "create email",
         "create new email",
         "compose email",
@@ -165,6 +195,22 @@ def parse_email_client_command(command):
         "open new mail",
     }:
         return {"action": "compose"}
+
+    voice_actions = {
+        "edit": {"edit", "edit draft", "edit selected draft", "edit this draft"},
+        "send": {"send", "send draft", "send selected draft", "send this draft"},
+        "save": {"save draft", "save this draft", "update draft"},
+        "cancel": {"cancel compose", "cancel email", "cancel draft"},
+        "reply": {"reply", "reply to this email", "reply to this message"},
+        "reply_all": {"reply all", "reply all to this email"},
+        "forward": {"forward", "forward this email", "forward this message"},
+        "archive": {"archive", "archive this email", "archive this message"},
+        "delete": {"delete", "delete this email", "delete this message"},
+        "refresh": {"refresh", "refresh mail", "refresh outlook"},
+    }
+    for action, phrases in voice_actions.items():
+        if normalized in phrases:
+            return {"action": action}
 
     if normalized in {
         "open email",
@@ -246,6 +292,8 @@ class OutlookEmailClientMixin:
         self._email_reviewed_drafts = set()
         self._email_send_requested = getattr(self, "_email_send_requested", set())
         self._email_pending_folder = None
+        self._email_pending_voice_action = None
+        self._email_pending_outlook_draft_id = None
         self._email_previous_ttk_theme = None
         self._email_folders = []
         self._email_current_message = None
@@ -271,11 +319,160 @@ class OutlookEmailClientMixin:
         except tk.TclError:
             return False
 
+    def get_selected_outlook_draft_snapshot(self):
+        message = getattr(self, "_email_current_message", None)
+        if not isinstance(message, dict) or message.get("is_draft") is not True:
+            return None
+        return dict(message)
+
+    def open_outlook_draft_by_id(self, draft_id, edit=False):
+        if threading.current_thread() is not self._main_thread:
+            self._safe_ui(self.open_outlook_draft_by_id, draft_id, edit)
+            return True
+        if not isinstance(draft_id, str) or not draft_id.strip():
+            return False
+
+        if edit:
+            compose_window = getattr(self, "_email_compose_window", None)
+            try:
+                if compose_window is not None and compose_window.winfo_exists():
+                    self._email_set_status(
+                        "Finish or cancel the open compose window before editing another draft.",
+                        error=True,
+                    )
+                    return False
+            except tk.TclError:
+                pass
+
+        if not self._email_window_exists():
+            self._email_open_after_list_id = draft_id.strip()
+            self.open_email_client(folder="drafts")
+        elif self._email_busy:
+            self._email_pending_outlook_draft_id = draft_id.strip()
+            self._email_pending_folder = ("drafts", "Drafts")
+        else:
+            self._email_open_after_list_id = draft_id.strip()
+            self.open_email_client(folder="drafts")
+        self._email_pending_voice_action = "edit" if edit else None
+        return True
+
+    def open_outlook_draft_for_edit(self, draft_id):
+        return self.open_outlook_draft_by_id(draft_id, edit=True)
+
+    def show_created_outlook_draft(self, draft_id):
+        if threading.current_thread() is not self._main_thread:
+            self._safe_ui(self.show_created_outlook_draft, draft_id)
+            return True
+        if not isinstance(draft_id, str) or not draft_id.strip():
+            return False
+
+        compose_window = getattr(self, "_email_compose_window", None)
+        try:
+            compose_open = (
+                compose_window is not None and compose_window.winfo_exists()
+            )
+        except tk.TclError:
+            compose_open = False
+
+        if compose_open:
+            if getattr(self, "_email_compose_mode", None) != "new":
+                self._email_set_status(
+                    "A verified draft was created, but the existing compose "
+                    "window was left unchanged.",
+                    error=True,
+                )
+                return False
+
+            fields = getattr(self, "_email_compose_fields", {})
+            body = getattr(self, "_email_compose_body", None)
+            has_content = any(
+                str(field.get() or "").strip()
+                for field in fields.values()
+            )
+            if body is not None:
+                has_content = has_content or bool(
+                    body.get("1.0", "end-1c").strip()
+                )
+            if has_content:
+                self._email_set_status(
+                    "A verified draft was created, but the compose window "
+                    "contains unsaved content and was left unchanged.",
+                    error=True,
+                )
+                return False
+
+            self._email_close_compose(compose_window)
+
+        if not self.open_outlook_draft_by_id(draft_id):
+            self._email_set_status(
+                "The verified Outlook draft could not be opened in the mail panel.",
+                error=True,
+            )
+            return False
+        return True
+
+    def update_open_compose_fields(self, updates):
+        if threading.current_thread() is not self._main_thread:
+            self._safe_ui(self.update_open_compose_fields, updates)
+            return True
+        if not isinstance(updates, dict) or not updates:
+            return False
+        if not self._email_window_exists():
+            return False
+
+        compose_window = getattr(self, "_email_compose_window", None)
+        try:
+            if compose_window is None or not compose_window.winfo_exists():
+                return False
+        except tk.TclError:
+            return False
+        if getattr(self, "_email_compose_mode", None) != "new":
+            return False
+
+        allowed_fields = {"to", "cc", "bcc", "subject", "body"}
+        if any(
+            key not in allowed_fields or not isinstance(value, str)
+            for key, value in updates.items()
+        ):
+            return False
+
+        fields = getattr(self, "_email_compose_fields", {})
+        body = getattr(self, "_email_compose_body", None)
+        if not isinstance(fields, dict):
+            return False
+        entries = {
+            key: fields.get(key)
+            for key in ("to", "cc", "bcc", "subject")
+            if key in updates
+        }
+        if any(entry is None for entry in entries.values()):
+            return False
+        if "body" in updates and body is None:
+            return False
+
+        for key in ("to", "cc", "bcc", "subject"):
+            if key in updates:
+                entry = entries[key]
+                entry.delete(0, tk.END)
+                entry.insert(0, updates[key])
+        if "body" in updates:
+            body.delete("1.0", "end")
+            body.insert("1.0", updates["body"])
+
+        status = getattr(self, "_email_compose_status", None)
+        if status is not None:
+            status.configure(text="Voice details entered in this compose window.")
+        return True
+
     def _close_email_client(self):
         window = getattr(self, "_email_client_window", None)
+        compose_window = getattr(self, "_email_compose_window", None)
+        if compose_window is not None:
+            self._email_close_compose(compose_window)
         self._email_request_id = getattr(self, "_email_request_id", 0) + 1
         self._email_busy = False
         self._email_client_window = None
+        self._email_current_message = None
         if window is not None:
             try:
                 window.destroy()
@@ -288,6 +485,135 @@ class OutlookEmailClientMixin:
             except tk.TclError:
                 pass
             self._email_previous_ttk_theme = None
+
+    def handle_email_voice_command(self, action):
+        if threading.current_thread() is not self._main_thread:
+            self._safe_ui(self.handle_email_voice_command, action)
+            return True
+
+        if action in {"edit", "send"} and not self._email_window_exists():
+            if action == "edit":
+                self.open_email_client(folder="drafts")
+                self._email_pending_voice_action = "edit"
+                self.write_log("SYS: Opening the latest Outlook draft for editing.")
+            else:
+                self.open_email_client(folder="drafts")
+                self.write_log(
+                    "SYS: Drafts opened. Select and review a draft, then say 'send draft'."
+                )
+            return True
+        if not self._email_window_exists():
+            if action in {"reply", "reply_all", "forward", "archive", "delete", "refresh"}:
+                self.open_email_client()
+                self.write_log(
+                    f"SYS: Outlook Mail opened. Select a message, then say '{action}'."
+                )
+            elif action in {"save", "cancel"}:
+                self.write_log("SYS: There is no open Outlook compose window.")
+            else:
+                return False
+            return True
+
+        compose_window = getattr(self, "_email_compose_window", None)
+        try:
+            compose_open = compose_window is not None and compose_window.winfo_exists()
+        except tk.TclError:
+            compose_open = False
+        if compose_open:
+            if action == "save":
+                callback = getattr(self, "_email_compose_save_action", None)
+                if callable(callback) and not self._email_busy:
+                    callback()
+                else:
+                    self._email_set_status("The current draft is still saving.", error=True)
+                return True
+            if action == "cancel":
+                self._email_close_compose(compose_window)
+                return True
+            if action == "send":
+                callback = getattr(self, "_email_compose_send_action", None)
+                if (
+                    getattr(self, "_email_compose_mode", None) != "edit"
+                    and callable(callback)
+                    and not self._email_busy
+                ):
+                    callback()
+                elif getattr(self, "_email_compose_mode", None) == "edit":
+                    self._email_set_status(
+                        "Save and approve the draft update first, then say 'send draft'.",
+                        error=True,
+                    )
+                else:
+                    self._email_set_status("The current draft is still saving.", error=True)
+                return True
+            self._email_set_status(
+                "Finish or cancel the open compose window before another Outlook action.",
+                error=True,
+            )
+            return True
+
+        if self._email_busy:
+            self._email_set_status(
+                "Outlook is still loading. Wait for the message to finish, then repeat the command.",
+                error=True,
+            )
+            return True
+
+        message = getattr(self, "_email_current_message", None)
+        if action == "refresh":
+            self._email_refresh()
+        elif action == "edit":
+            if isinstance(message, dict) and message.get("is_draft") is True:
+                self._email_edit_draft()
+            else:
+                self._email_set_status("Open a saved draft before asking to edit it.", error=True)
+        elif action == "send":
+            if isinstance(message, dict) and message.get("is_draft") is True:
+                self._email_request_send()
+            else:
+                self._email_set_status("Open and review a saved draft before asking to send it.", error=True)
+        elif action in {"reply", "reply_all", "forward"}:
+            if not isinstance(message, dict) or message.get("is_draft") is True:
+                self._email_set_status("Select and open a received message first.", error=True)
+            elif action == "reply":
+                self._email_reply()
+            elif action == "reply_all":
+                self._email_reply_all()
+            else:
+                self._email_forward()
+        elif action == "archive":
+            if isinstance(message, dict) and message.get("id"):
+                self._email_archive()
+            else:
+                self._email_set_status("Select a message before asking to archive it.", error=True)
+        elif action == "delete":
+            if isinstance(message, dict) and message.get("id"):
+                self._email_delete()
+            else:
+                self._email_set_status("Select a message before asking to delete it.", error=True)
+        elif action in {"save", "cancel"}:
+            self._email_set_status("There is no open compose window.", error=True)
+        else:
+            return False
+        return True
+
+    def _email_apply_pending_voice_action(self):
+        if self._email_busy or not self._email_window_exists():
+            return
+        action = getattr(self, "_email_pending_voice_action", None)
+        if action is None:
+            return
+        message = getattr(self, "_email_current_message", None)
+        if isinstance(message, dict) and message.get("is_draft") is True:
+            self._email_pending_voice_action = None
+            self.handle_email_voice_command(action)
+        elif self._email_current_folder.casefold() in {"draft", "drafts"}:
+            if not self._email_tree.get_children():
+                self._email_pending_voice_action = None
+                self._email_set_status("There are no saved drafts to edit.", error=True)
+            elif message is not None or self._email_tree.selection():
+                self._email_pending_voice_action = None
+                self._email_set_status("The selected Outlook item is not a readable draft.", error=True)
 
     def _build_email_client(self):
         col = self.col
@@ -723,9 +1049,24 @@ class OutlookEmailClientMixin:
                     self._email_select_message()
                     return
             self._email_set_status(
-                "Draft was saved, but it was not present in the refreshed Drafts list.",
+                "The requested draft was not present in the refreshed Drafts list.",
                 error=True,
             )
+            if self._email_pending_voice_action == "edit":
+                self._email_pending_voice_action = None
+            return
+
+        if (
+            not append
+            and self._email_current_folder.casefold() in {"draft", "drafts"}
+        ):
+            rows = self._email_tree.get_children()
+            if rows:
+                row_id = rows[0]
+                self._email_tree.selection_set(row_id)
+                self._email_tree.focus(row_id)
+                self._email_tree.see(row_id)
+                self._email_select_message()
 
     def _email_select_message(self, _event=None):
         selected = self._email_tree.selection()
@@ -912,8 +1253,20 @@ class OutlookEmailClientMixin:
             self._email_open_compose("edit", message)
 
     def _email_open_compose(self, mode, message):
+        existing = getattr(self, "_email_compose_window", None)
+        try:
+            if existing is not None and existing.winfo_exists():
+                existing.lift()
+                existing.focus_force()
+                return
+        except tk.TclError:
+            pass
+
         col = self.col
         win = tk.Toplevel(self._email_client_window)
+        self._email_compose_window = win
+        self._email_compose_mode = mode
+        win.protocol("WM_DELETE_WINDOW", lambda: self._email_close_compose(win))
         title = {
             "new": "New email",
             "reply": "Reply",
@@ -984,21 +1337,7 @@ class OutlookEmailClientMixin:
             if initial.get(key) and initial[key] != "None":
                 entry.insert(0, initial[key])
             fields[key] = entry
-
-        body_frame = tk.Frame(win, bg=col["bg"])
-        body_frame.pack(fill="both", expand=True, padx=16, pady=(10, 8))
-        tk.Label(
-            body_frame, text="MESSAGE", bg=col["bg"], fg=col["mid"],
-            font=("Consolas", 9, "bold"),
-        ).pack(anchor="w", pady=(0, 5))
-        body = tk.Text(
-            body_frame, wrap="word", bg=col["input"], fg=col["text"],
-            insertbackground=col["text"], relief="flat", padx=10, pady=10,
-            font=("Segoe UI", 10),
-        )
-        body.pack(fill="both", expand=True)
-        if mode == "edit" and message:
-            body.insert("1.0", plain_text_body(message.get("body"), message.get("body_type")))
+        self._email_compose_fields = fields
 
         status_text = (
             "Send via GHOST saves a draft and asks for your approval."
@@ -1009,9 +1348,26 @@ class OutlookEmailClientMixin:
             win, text=status_text, bg=col["bg"], fg=col["mid"],
             font=("Segoe UI", 9), anchor="w",
         )
-        status.pack(fill="x", padx=16, pady=(0, 4))
+        self._email_compose_status = status
         buttons = tk.Frame(win, bg=col["bg"])
-        buttons.pack(fill="x", padx=16, pady=(0, 12))
+        buttons.pack(side="bottom", fill="x", padx=16, pady=(0, 12))
+        status.pack(side="bottom", fill="x", padx=16, pady=(0, 4))
+
+        body_frame = tk.Frame(win, bg=col["bg"])
+        body_frame.pack(fill="both", expand=True, padx=16, pady=(10, 8))
+        tk.Label(
+            body_frame, text="MESSAGE", bg=col["bg"], fg=col["mid"],
+            font=("Consolas", 9, "bold"),
+        ).pack(anchor="w", pady=(0, 5))
+        body = tk.Text(
+            body_frame, wrap="word", bg=col["input"], fg=col["text"],
+            insertbackground=col["text"], relief="flat", padx=10, pady=10,
+            font=("Segoe UI", 10), height=6,
+        )
+        self._email_compose_body = body
+        body.pack(fill="both", expand=True)
+        if mode == "edit" and message:
+            body.insert("1.0", plain_text_body(message.get("body"), message.get("body_type")))
 
         def save(send_after_save=False):
             values = {key: entry.get().strip() for key, entry in fields.items()}
@@ -1039,11 +1395,12 @@ class OutlookEmailClientMixin:
                     message.get("id"), to, cc, values["subject"], text
                 )
                 if not self._email_submit_ghost_command(
-                    command, "Draft update requested. Confirm it in GHOST before changes execute."
+                    command,
+                    "Update request sent to GHOST. Nothing is saved until you approve the exact changes.",
                 ):
                     status.configure(text="GHOST is not ready to process this request.", fg=col["red"])
                 else:
-                    win.destroy()
+                    self._email_close_compose(win)
                 return
 
             arguments = {"body": text, "is_html": False}
@@ -1114,20 +1471,35 @@ class OutlookEmailClientMixin:
                 lambda: save(send_after_save=True), accent=col["green"],
             ).pack(side="left")
         self._email_button(
-            buttons, "Request Update" if mode == "edit" else "Save Draft",
+            buttons, "Save Changes" if mode == "edit" else "Save Draft",
             save, accent=col["pri"]
         ).pack(side="right", padx=(6, 0))
         self._email_button(
-            buttons, "Cancel", win.destroy
+            buttons, "Cancel", lambda: self._email_close_compose(win)
         ).pack(side="right")
+        self._email_compose_save_action = save
+        self._email_compose_send_action = (
+            lambda: save(send_after_save=True) if mode != "edit" else None
+        )
         fields["to"].focus_set()
         win.grab_set()
 
-    def _email_compose_saved(self, compose_window, snapshot, send_after_save=False):
+    def _email_close_compose(self, window):
         try:
-            compose_window.destroy()
+            window.destroy()
         except tk.TclError:
             pass
+        if getattr(self, "_email_compose_window", None) is window:
+            self._email_compose_window = None
+            self._email_compose_mode = None
+            self._email_compose_save_action = None
+            self._email_compose_send_action = None
+            self._email_compose_fields = None
+            self._email_compose_body = None
+            self._email_compose_status = None
+
+    def _email_compose_saved(self, compose_window, snapshot, send_after_save=False):
+        self._email_close_compose(compose_window)
         self._email_current_folder = "drafts"
         self._email_current_label = "Drafts"
         self._email_search_query = ""
@@ -1156,10 +1528,15 @@ class OutlookEmailClientMixin:
         if not isinstance(draft_id, str) or not draft_id.strip():
             raise ValueError("A valid Outlook draft ID is required.")
         return (
-            "Update this existing Personal Outlook draft only; do not send it. "
-            f"Draft ID: {draft_id.strip()}. Set To to {to!r}, CC to {cc!r}, "
-            f"subject to {subject!r}, and body to {body!r}. "
-            "Read it back after updating. Obtain the required explicit approval first."
+            "The user clicked Save Changes for this existing Personal Outlook draft. "
+            "Do not send it or create another draft. Prepare this exact update: "
+            f"draft_id={draft_id.strip()!r}, to={to!r}, cc={cc!r}, "
+            f"subject={subject!r}, body={body!r}. "
+            "Call personal_outlook with action='call', "
+            "tool_name='outlook_update_draft', and the exact values above once "
+            "to invoke GHOST's explicit approval gate. Do not retry or claim "
+            "the draft is saved until the gate approves, the update succeeds, "
+            "and you read the same draft back to verify it."
         )
 
     def _email_request_send(self):
@@ -1257,12 +1634,14 @@ class OutlookEmailClientMixin:
             if on_error is not None:
                 on_error(error)
             self._email_apply_pending_folder()
+            self._email_apply_pending_voice_action()
             return
         try:
             on_success(result)
         except Exception as exc:
             self._email_set_status(f"Outlook response could not be displayed: {exc}", error=True)
         self._email_apply_pending_folder()
+        self._email_apply_pending_voice_action()
 
     def _email_apply_pending_folder(self):
         if self._email_busy or not self._email_window_exists():
@@ -1271,6 +1650,10 @@ class OutlookEmailClientMixin:
         if pending is None:
             return
         self._email_pending_folder = None
+        draft_id = getattr(self, "_email_pending_outlook_draft_id", None)
+        if draft_id and pending[0] == "drafts":
+            self._email_open_after_list_id = draft_id
+            self._email_pending_outlook_draft_id = None
         self._email_select_folder(*pending)
 
     @staticmethod

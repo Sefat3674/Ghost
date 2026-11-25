@@ -75,12 +75,12 @@ THEMES = {
 
 DEFAULT_BRAND = {
     "company": "PRAN-RFL GROUP",
-    "division": "Smart Manufacturing & Factory Automation",
+    "division": "",
     "product": "GHOST",
     "tagline": "Industrial Intelligence Assistant",
     "footer": "PRAN-RFL Group  \u00b7  Smart Manufacturing & IBS ERP",
     "logo": "assets/pran_rfl_logo.png",
-    "logo_plate": True,
+    "logo_plate": False,
     "panels": ["AI CORE", "PLANT NETWORK", "FACTORY UNITS"],
 }
 

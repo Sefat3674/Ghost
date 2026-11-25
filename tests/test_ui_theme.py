@@ -2,8 +2,10 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from ui import get_base_dir
+import ui
+from ui import GHOSTUI, get_base_dir
 from ui.theme import (
     DEFAULT_BRAND,
     load_brand,
@@ -63,8 +65,45 @@ class UIThemeTests(unittest.TestCase):
             brand = load_brand(brand_file)
 
         self.assertEqual(brand["company"], "Test Company")
+        self.assertEqual(brand["division"], "")
         self.assertNotIn("unknown", brand)
         self.assertEqual(brand["panels"], DEFAULT_BRAND["panels"])
+
+    def test_logo_loads_without_optional_pillow(self):
+        class FakePhotoImage:
+            def __init__(self, width=296, height=115):
+                self._width = width
+                self._height = height
+                self.subsample_calls = []
+
+            def width(self):
+                return self._width
+
+            def height(self):
+                return self._height
+
+            def subsample(self, x, y):
+                self.subsample_calls.append((x, y))
+                self._width = max(1, self._width // x)
+                self._height = max(1, self._height // y)
+                return self
+
+        ghost_ui = object.__new__(GHOSTUI)
+        ghost_ui.brand = {"logo": "assets/pran_rfl_logo.png"}
+        ghost_ui.S = 1.0
+        image = FakePhotoImage()
+
+        with (
+            patch.object(ui, "Image", None),
+            patch.object(ui, "ImageTk", None),
+            patch.object(ui.tk, "PhotoImage", return_value=image) as photo_image,
+        ):
+            ghost_ui._load_logo()
+
+        photo_image.assert_called_once()
+        self.assertIs(ghost_ui._logo, image)
+        self.assertEqual(image.subsample_calls, [(3, 3)])
+        self.assertEqual(ghost_ui._logo_w, 98)
 
 
 if __name__ == "__main__":
