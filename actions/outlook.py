@@ -2484,7 +2484,11 @@ def outlook_action(parameters, response=None, player=None):
             return (f"Outlook is connected as {who}." if auth.is_authenticated()
                     else "Outlook is not connected or the session expired. Use action='login'.")
 
-        if not auth.get_access_token():
+        token = auth.get_access_token()
+        if not token and action in {"read", "inbox"}:
+            auth.login()
+            token = auth.get_access_token()
+        if not token:
             return ("Your Microsoft Outlook session has expired or is not connected. "
                     "Use action='login' (or sign in to Outlook) first.")
 

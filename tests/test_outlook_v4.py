@@ -183,10 +183,11 @@ class EmailServiceTests(unittest.TestCase):
         self.assertEqual(failed[0]["id"], "b")
 
 
-def _run(params, **services):
+def _run(params, auth=None, **services):
     """Invoke outlook_action with fake auth and fake services."""
-    auth = mock.Mock()
-    auth.get_access_token.return_value = "tok"
+    if auth is None:
+        auth = mock.Mock()
+        auth.get_access_token.return_value = "tok"
     emails = services.get("emails") or mock.Mock()
     with mock.patch.object(ol, "get_auth", return_value=auth), \
          mock.patch.object(ol, "GraphClient", return_value=mock.Mock()), \
@@ -203,6 +204,27 @@ class DispatcherTests(unittest.TestCase):
     def test_unknown_action(self):
         out, _ = _run({"action": "format_disk"})
         self.assertIn("not available", out)
+
+    def test_inbox_starts_sign_in_when_session_is_missing(self):
+        auth = mock.Mock()
+        auth.get_access_token.side_effect = [None, "tok"]
+        emails = mock.Mock()
+        emails.get_latest_emails.return_value = []
+
+        out, _ = _run({"action": "inbox"}, auth=auth, emails=emails)
+
+        auth.login.assert_called_once_with()
+        emails.get_latest_emails.assert_called_once_with(10, folder="inbox")
+        self.assertIn("folder 'inbox' is empty", out)
+
+    def test_other_read_actions_do_not_start_sign_in_automatically(self):
+        auth = mock.Mock()
+        auth.get_access_token.return_value = None
+
+        out, _ = _run({"action": "profile"}, auth=auth)
+
+        auth.login.assert_not_called()
+        self.assertIn("Use action='login'", out)
 
     def test_every_gated_action_has_a_handler(self):
         self.assertTrue(ol.APPROVAL_REQUIRED <= set(ol._HANDLERS))

@@ -868,13 +868,16 @@ TOOL_DECLARATIONS = [
     {
         "name": "outlook",
         "description": (
-            "LEGACY WORK/SCHOOL MICROSOFT OUTLOOK ONLY. "
-            "Use this tool only when the user explicitly requests their "
-            "separate Work or School Outlook account. "
-            "Do NOT use this tool for the user's personal Microsoft account. "
-            "For personal Microsoft Outlook email, inbox, search, calendar, "
-            "contacts, tasks, drafts, attachments, and account profile, "
-            "always use personal_outlook instead. "
+            "MICROSOFT OUTLOOK INBOX: For any request in any language to show, "
+            "open, check, or list the user's Outlook inbox, use this tool with "
+            "action='inbox' for personal and work/school accounts. If sign-in "
+            "is needed, Ghost opens Microsoft's secure sign-in page and then "
+            "continues to the inbox. Never ask the user to type or send their "
+            "Outlook password in chat or as a tool argument. "
+            "For other personal Microsoft Outlook email, calendar, contacts, "
+            "tasks, drafts, and attachments, use personal_outlook. Use this "
+            "tool for other operations only when the user explicitly requests "
+            "a separate Work or School Outlook account. "
             "For Gmail accounts, use gmail. "
             "Preserve all existing confirmation requirements for mutations. "
             "Actions: read, inbox, unread, search, read_email, move_email, "
@@ -1432,14 +1435,22 @@ TOOL_DECLARATIONS = [
         "description": (
             "PRIMARY TOOL FOR THE USER'S PERSONAL MICROSOFT OUTLOOK ACCOUNT. "
             "Use this tool for all personal Outlook email, drafts, folders, "
-            "attachments, calendar, contacts, tasks, and account operations. "
-            "Do not use the legacy outlook tool for this account. "
+            "attachments, calendar, contacts, tasks, and account operations, "
+            "except inbox-list requests. "
+            "For any-language request to show, open, check, or list the Outlook "
+            "inbox, use outlook with action='inbox'; it starts Microsoft's "
+            "secure sign-in if needed and continues after authorization. "
+            "Never ask for the Outlook password in chat or pass it to a tool. "
+            "Do not use the legacy outlook tool for other personal-account "
+            "operations besides inbox listing. "
             "Use gmail only when the user explicitly requests a Gmail account. "
-            "Use outlook only for a separate Work/School Outlook account. "
+            "Use outlook for other operations only on a separate Work/School "
+            "account. "
             "DEFAULT EMAIL ROUTING: For generic email requests that do not "
             "explicitly specify Gmail or Work/School Outlook, use this "
-            "personal_outlook tool. This includes sending email, checking "
-            "email, reading the inbox, and showing drafts. "
+            "personal_outlook tool, except inbox listing which uses outlook "
+            "as described above. This includes sending email and showing "
+            "drafts. Respond in the language the user used. "
 
             "SCHEMA RULE: Use list_tools only when the required MCP tool name "
             "or schema is not already specified in these instructions or "
@@ -1620,7 +1631,8 @@ TOOL_DECLARATIONS = [
             "and receiving explicit approval. "
 
             "ACCOUNT: Use outlook_auth_status, outlook_whoami, and "
-            "outlook_get_mail_tips for account-related read-only requests. "
+            "outlook_get_mail_tips for account-related read-only requests "
+            "other than inbox listing. "
 
             "SAFETY: Every mutation, send, reply, forward, move, delete, "
             "upload, attachment change, folder change, event change, contact "
@@ -3776,7 +3788,7 @@ class GHOSTLive:
             "set_mode":          (_set_mode, 10),
             "set_voice":         (_set_voice, 10),
             "set_mood":          (_set_mood, 10),
-            "outlook":           (_lazy("actions.outlook", "outlook_action", response=None, player=ui), 60),
+            "outlook":           (_lazy("actions.outlook", "outlook_action", response=None, player=ui), 180),
             "personal_outlook":  (_lazy("integrations.personal_outlook_mcp", "personal_outlook_action"), 180),
             "gmail":             (_lazy("actions.gmail", "gmail_action", response=None, player=ui), 60),
             "read_pdf":          (_lazy("actions.pdf_reader", "read_pdf", response=None, player=ui), 60),

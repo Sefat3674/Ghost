@@ -8,7 +8,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / ".env")
 
 CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID", "").strip()
-TENANT_ID = os.getenv("MICROSOFT_TENANT_ID", "consumers").strip()
+TENANT_ID = os.getenv("MICROSOFT_TENANT_ID", "common").strip()
 
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 REDIRECT_URI = "http://localhost"

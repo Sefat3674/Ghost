@@ -208,6 +208,43 @@ All settings reside in the git-ignored `config/` directory. You can configure GH
 | `GHOST_TELEGRAM_TOKEN` | `api_keys.json -> telegram_bot_token` | Telegram Bot token from [@BotFather](https://t.me/BotFather). |
 | `GHOST_TELEGRAM_CHAT_ID` | `api_keys.json -> telegram_chat_id` | Numeric Telegram user ID authorized to control GHOST. |
 
+### Outlook sign-in (Microsoft OAuth)
+
+GHOST does not accept or store your Outlook email password. Outlook access uses
+Microsoft OAuth: you sign in on Microsoft's page and approve the requested
+permissions.
+
+1. In the [Microsoft Entra admin center](https://entra.microsoft.com/), create
+   an app registration. To support both personal Outlook.com/Hotmail and work
+   or school accounts, choose **Accounts in any organizational directory and
+   personal Microsoft accounts**.
+2. Under **Authentication**, add the **Mobile and desktop applications**
+   platform with redirect URI `http://localhost`, and enable public client
+   flows if prompted.
+3. Add these **delegated** Microsoft Graph permissions: `User.Read`,
+   `Mail.ReadWrite`, `Mail.Send`, `Calendars.ReadWrite`, `Contacts.ReadWrite`,
+   and `MailboxSettings.ReadWrite`.
+4. In the project-root `.env` file, set the Application (client) ID from the
+   app registration and use the `common` authority for both account types:
+
+   ```dotenv
+   MICROSOFT_CLIENT_ID=your-application-client-id
+   MICROSOFT_TENANT_ID=common
+   ```
+
+   Keep `.env` local; do not commit it or share the ID together with any
+   password. For a personal-only account use `consumers`; for an organization
+   account you can use its tenant ID.
+5. Install project dependencies with `python setup.py` and start GHOST. The
+   first request to show/list/check the Outlook inbox opens Microsoft's sign-in
+   page when needed, then continues to the inbox after you authorize. You can
+   also run the Outlook `login` action manually. GHOST stores the refreshable
+   token cache using Windows DPAPI under `%LOCALAPPDATA%\Ghost\Outlook`.
+
+Inbox listing uses this OAuth configuration. Other personal-account actions
+still use the separate `personal_outlook` MCP connector and its own external
+server installation/configuration.
+
 ---
 
 ## 💬 Telegram Remote Control
