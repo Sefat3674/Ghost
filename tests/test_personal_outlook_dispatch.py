@@ -667,7 +667,11 @@ class PersonalOutlookDispatchTests(unittest.TestCase):
         )
 
         async def run():
-            with patch.dict(
+            with patch.object(
+                main,
+                "_bind_outlook_approval_identity",
+                return_value=None,
+            ), patch.dict(
                 live._tool_handlers,
                 {"outlook": (mock_outlook_handler, 10)},
             ):

@@ -210,40 +210,112 @@ All settings reside in the git-ignored `config/` directory. You can configure GH
 
 ### Outlook sign-in (Microsoft OAuth)
 
-GHOST does not accept or store your Outlook email password. Outlook access uses
-Microsoft OAuth: you sign in on Microsoft's page and approve the requested
-permissions.
+GHOST does not collect or store Microsoft passwords. Every personal Outlook,
+Hotmail, Live, and work/school Microsoft 365 account connects through
+Microsoft's sign-in page. The self-hosted Outlook backend holds Microsoft
+tokens; the desktop stores only its backend session, protected with Windows
+DPAPI.
+
+#### Microsoft Entra app registration
 
 1. In the [Microsoft Entra admin center](https://entra.microsoft.com/), create
-   an app registration. To support both personal Outlook.com/Hotmail and work
-   or school accounts, choose **Accounts in any organizational directory and
-   personal Microsoft accounts**.
-2. Under **Authentication**, add the **Mobile and desktop applications**
-   platform with redirect URI `http://localhost`, and enable public client
-   flows if prompted.
-3. Add these **delegated** Microsoft Graph permissions: `User.Read`,
-   `Mail.ReadWrite`, `Mail.Send`, `Calendars.ReadWrite`, `Contacts.ReadWrite`,
-   and `MailboxSettings.ReadWrite`.
-4. In the project-root `.env` file, set the Application (client) ID from the
-   app registration and use the `common` authority for both account types:
+   or reuse an app registration. Set **Supported account types** to
+   **Accounts in any organizational directory and personal Microsoft
+   accounts**. The authority is `common`.
+2. Under **Authentication**, add a **Web** platform redirect URI that exactly
+   matches `GHOST_OUTLOOK_REDIRECT_URI`, for example
+   `https://outlook.example.com/auth/callback`. The backend accepts HTTPS
+   callbacks; plain HTTP is allowed only for `localhost` development.
+3. Under **Certificates & secrets**, create a client secret (or configure a
+   certificate). Put the secret only in the backend's environment/secret
+   manager. Never put it in a distributed desktop configuration.
+4. Add these **delegated Microsoft Graph permissions** to the registration:
+   `User.Read`, `Mail.ReadWrite`, `Mail.Send`, `Calendars.ReadWrite`,
+   `Contacts.ReadWrite`, and `MailboxSettings.ReadWrite`. They cover Ghost's
+   current mail, calendar, contacts, and mailbox-settings actions. An
+   organization's consent policy may require an administrator to approve
+   them.
+5. Do not enable public-client flows for this confidential web authorization
+   code flow. The app registration does not need to be recreated if it already
+   has the required account types, redirect URI, permissions, and a usable
+   client credential.
 
-   ```dotenv
-   MICROSOFT_CLIENT_ID=your-application-client-id
-   MICROSOFT_TENANT_ID=common
-   ```
+#### Configure the backend
 
-   Keep `.env` local; do not commit it or share the ID together with any
-   password. For a personal-only account use `consumers`; for an organization
-   account you can use its tenant ID.
-5. Install project dependencies with `python setup.py` and start GHOST. The
-   first request to show/list/check the Outlook inbox opens Microsoft's sign-in
-   page when needed, then continues to the inbox after you authorize. You can
-   also run the Outlook `login` action manually. GHOST stores the refreshable
-   token cache using Windows DPAPI under `%LOCALAPPDATA%\Ghost\Outlook`.
+On the backend host, create the project-root `.env` file (it is Git-ignored)
+or supply the same values through a secret manager/environment variables:
 
-Inbox listing uses this OAuth configuration. Other personal-account actions
-still use the separate `personal_outlook` MCP connector and its own external
-server installation/configuration.
+```dotenv
+MICROSOFT_CLIENT_ID=<Entra application client ID>
+MICROSOFT_CLIENT_SECRET=<backend-only client secret>
+MICROSOFT_TENANT_ID=common
+GHOST_OUTLOOK_REDIRECT_URI=https://outlook.example.com/auth/callback
+GHOST_OUTLOOK_ENCRYPTION_KEY=<unique URL-safe base64 key>
+GHOST_OUTLOOK_DB_PATH=E:\Ghost\data\outlook_backend.sqlite3
+```
+
+Generate a fresh 32-byte encryption key in PowerShell and keep it in the
+backend secret manager. The same key must be retained to decrypt existing
+token caches; losing it requires users to connect again:
+
+```powershell
+$bytes = New-Object byte[] 32
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+[Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+```
+
+Run the backend from the repository root. It listens on `127.0.0.1:8765`;
+for remote desktops, place it behind an HTTPS reverse proxy and set the
+Microsoft redirect URI to that public HTTPS address. Keep the backend port
+private, use a persistent protected database path, and disable proxy request
+body logging on `/auth/callback` (Microsoft posts the authorization response
+there). Run a single backend worker so per-account token-cache locking remains
+effective.
+
+```powershell
+cd E:\Ghost\Ghost
+python -m outlook.backend.api
+```
+
+The backend session token is a bearer credential bound to the connected
+Microsoft identity. The normal Ghost desktop action path enforces the existing
+exact-action confirmation gate before Outlook mutations; a caller that
+possesses a valid backend session token is treated as a trusted client. Protect
+that token and the backend endpoint accordingly.
+
+#### Configure and run the desktop
+
+On each Ghost desktop, set `GHOST_OUTLOOK_BACKEND_URL` to the backend's HTTPS
+URL (or `http://127.0.0.1:8765` for local development). Desktop users do not
+enter a Client ID, client secret, or encryption key.
+
+```powershell
+cd E:\Ghost\Ghost
+$env:GHOST_OUTLOOK_BACKEND_URL = "https://outlook.example.com"
+python setup.py
+python main.py
+```
+
+Ask Ghost to connect Outlook and provide the Microsoft account email as an
+account hint. Ghost opens Microsoft's official sign-in page; users enter their
+password and complete MFA/consent there. The hint does not restrict which
+Microsoft account can complete sign-in. Ghost supports the existing Outlook
+mail, search, draft, send, sent-mail, calendar, contacts, and disconnect
+actions through the same account-bound backend.
+
+Disconnecting in Ghost removes Ghost's stored session and encrypted token
+cache. It does not revoke the app's consent at Microsoft. To revoke consent,
+remove Ghost from the connected-apps/permissions page for the relevant
+Microsoft account or ask the organization's Microsoft 365 administrator.
+
+Run the mock-only Outlook and approval regression tests from the project root:
+
+```powershell
+python -m pytest tests\test_outlook_backend_auth.py tests\test_outlook_v4.py tests\test_personal_outlook_guard.py tests\test_personal_outlook_dispatch.py -q
+```
+
+These tests do not sign in to Microsoft, access a real mailbox, or send email.
 
 ---
 

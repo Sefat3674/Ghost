@@ -37,6 +37,10 @@ CACHE_DIRECTORY = (
     Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "Ghost" / "Outlook"
 )
 CACHE_FILE = CACHE_DIRECTORY / "token_cache.bin"
+BACKEND_SESSION_FILE = CACHE_DIRECTORY / "backend_session.bin"
+BACKEND_BASE_URL = os.getenv(
+    "GHOST_OUTLOOK_BACKEND_URL", "http://127.0.0.1:8765"
+).strip().rstrip("/")
 
 EMAIL_LIMIT = 10
 MAX_LIMIT = 50

@@ -1,4 +1,4 @@
-"""Microsoft identity platform sign-in for Ghost (MSAL public client)."""
+"""Legacy direct MSAL client; Ghost's Outlook actions use the backend client."""
 import threading
 
 import msal
@@ -12,7 +12,7 @@ class MicrosoftAuthenticationError(Exception):
 
 
 class MicrosoftAuth:
-    """Thread-safe wrapper. Use get_auth() to share one instance."""
+    """Compatibility wrapper for scripts that explicitly instantiate it."""
 
     def __init__(self):
         if not CLIENT_ID:
@@ -78,14 +78,8 @@ class MicrosoftAuth:
         return self.get_access_token() is not None
 
 
-_instance = None
-_instance_lock = threading.Lock()
-
-
 def get_auth():
-    """Shared MicrosoftAuth instance (avoids rebuilding the cache per call)."""
-    global _instance
-    with _instance_lock:
-        if _instance is None:
-            _instance = MicrosoftAuth()
-        return _instance
+    """Return a backend client with per-Windows-user DPAPI session storage."""
+    from outlook.auth.backend_auth import BackendAuth
+
+    return BackendAuth()

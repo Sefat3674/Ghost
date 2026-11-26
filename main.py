@@ -868,16 +868,16 @@ TOOL_DECLARATIONS = [
     {
         "name": "outlook",
         "description": (
-            "MICROSOFT OUTLOOK INBOX: For any request in any language to show, "
-            "open, check, or list the user's Outlook inbox, use this tool with "
-            "action='inbox' for personal and work/school accounts. If sign-in "
-            "is needed, Ghost opens Microsoft's secure sign-in page and then "
-            "continues to the inbox. Never ask the user to type or send their "
-            "Outlook password in chat or as a tool argument. "
-            "For other personal Microsoft Outlook email, calendar, contacts, "
-            "tasks, drafts, and attachments, use personal_outlook. Use this "
-            "tool for other operations only when the user explicitly requests "
-            "a separate Work or School Outlook account. "
+            "MICROSOFT OUTLOOK: Use this tool for any personal or work/school "
+            "Microsoft account and all Outlook email, calendar, contacts, "
+            "tasks, drafts, and attachments. For any request in any language "
+            "to show, open, check, or list the inbox, use action='inbox'. If "
+            "sign-in is needed, ask for the user's Microsoft email address "
+            "and use action='login'; Ghost opens Microsoft's secure sign-in "
+            "page. Never ask for the Outlook password in chat or as a tool "
+            "argument. Do not use the legacy personal_outlook connector for "
+            "normal Outlook requests; use it only if the user explicitly asks "
+            "for that separate connector. "
             "For Gmail accounts, use gmail. "
             "Preserve all existing confirmation requirements for mutations. "
             "Actions: read, inbox, unread, search, read_email, move_email, "
@@ -899,6 +899,13 @@ TOOL_DECLARATIONS = [
                         "attachments | profile | summarize | intelligence | "
                         "draft_reply | draft_grouped_reply | show_draft | "
                         "revise_reply | send_reply | filter | thread | create_draft | update_draft | list_drafts | send_draft | delete_draft | send_email | reply | forward | mark_read | mark_unread | flag | unflag | complete_flag | set_importance | set_categories | archive | delete_email | permanent_delete | event | create_event | update_event | delete_event | respond_event | free_slots | create_contact | update_contact | delete_contact | download_attachment | attach_file | categories | create_category | auto_reply | set_auto_reply | login | logout | status"
+                    )
+                },
+                "email": {
+                    "type": "STRING",
+                    "description": (
+                        "Microsoft account email for action='login'. This is only "
+                        "an account hint; the user enters their password on Microsoft's page."
                     )
                 },
                 "query": {
@@ -1433,10 +1440,13 @@ TOOL_DECLARATIONS = [
     {
         "name": "personal_outlook",
         "description": (
-            "PRIMARY TOOL FOR THE USER'S PERSONAL MICROSOFT OUTLOOK ACCOUNT. "
-            "Use this tool for all personal Outlook email, drafts, folders, "
-            "attachments, calendar, contacts, tasks, and account operations, "
-            "except inbox-list requests. "
+            "LEGACY SEPARATE PERSONAL_OUTLOOK CONNECTOR. Do not use this "
+            "connector for a normal personal or work/school Microsoft account; "
+            "use the unified outlook tool, which opens Microsoft's secure "
+            "sign-in and keeps the account session isolated. Use this legacy "
+            "connector only when the user explicitly requests it by name. "
+            "The remaining connector-specific instructions in this description "
+            "apply only to that explicit request. "
             "For any-language request to show, open, check, or list the Outlook "
             "inbox, use outlook with action='inbox'; it starts Microsoft's "
             "secure sign-in if needed and continues after authorization. "
@@ -1444,13 +1454,11 @@ TOOL_DECLARATIONS = [
             "Do not use the legacy outlook tool for other personal-account "
             "operations besides inbox listing. "
             "Use gmail only when the user explicitly requests a Gmail account. "
-            "Use outlook for other operations only on a separate Work/School "
-            "account. "
             "DEFAULT EMAIL ROUTING: For generic email requests that do not "
-            "explicitly specify Gmail or Work/School Outlook, use this "
-            "personal_outlook tool, except inbox listing which uses outlook "
-            "as described above. This includes sending email and showing "
-            "drafts. Respond in the language the user used. "
+            "explicitly specify Gmail or Work/School Outlook, use the unified "
+            "outlook tool, including sending email and showing drafts. Use "
+            "this connector only when explicitly named. Respond in the "
+            "language the user used. "
 
             "SCHEMA RULE: Use list_tools only when the required MCP tool name "
             "or schema is not already specified in these instructions or "
@@ -2019,6 +2027,33 @@ OUTLOOK_SUMMARY_ROUTING_INSTRUCTIONS = (
     "popup described in the Personal Outlook instructions. Do not use "
     "a separate executive report tool or a different date window. "
 )
+
+
+def _bind_outlook_approval_identity(name, args):
+    args.pop("_ghost_outlook_identity", None)
+    if name != "outlook":
+        return None
+
+    from safety import Risk, classify
+    if classify(name, args) != Risk.HIGH:
+        return None
+
+    from outlook.config import BACKEND_SESSION_FILE
+    if not BACKEND_SESSION_FILE.is_file():
+        return "Connect Outlook before requesting approval for an Outlook change."
+
+    from outlook.auth.backend_auth import OutlookBackendError
+    from outlook.auth.microsoft_auth import get_auth
+    try:
+        context = get_auth().get_cached_account_context()
+    except OutlookBackendError as exc:
+        return f"Outlook approval is blocked because the account could not be verified: {exc}"
+
+    identity_id = context.get("identity_id") if context else None
+    if not identity_id:
+        return "Connect Outlook before requesting approval for an Outlook change."
+    args["_ghost_outlook_identity"] = identity_id
+    return None
 
 
 
@@ -3822,6 +3857,7 @@ class GHOSTLive:
         from safety import sanitize as _sanitize
         args = dict(args or {})
         args.pop("_ghost_safety_approved", None)
+        args.pop("_ghost_outlook_identity", None)
         blocked = self.loop_guard.check(name, args)
         if blocked:
             print(f"[GHOST] ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂºÃ¢â‚¬Ëœ {name} blocked by loop guard")
@@ -3837,6 +3873,13 @@ class GHOSTLive:
         confirm_token = str(args.pop(CONFIRM_TOKEN_PARAM, ""))
         face_verify = bool(args.pop("face_verify", False))
 
+        identity_error = _bind_outlook_approval_identity(name, args)
+        if identity_error:
+            return ToolResult(
+                ok=False,
+                content=identity_error,
+                error_kind="identity",
+            )
         fingerprint = _fingerprint(name, args)
         requires_confirmation = needs_confirmation(name, args)
 
@@ -3937,6 +3980,8 @@ class GHOSTLive:
         if entry is None:
             return ToolResult(ok=False, content=f"Unknown tool: {name}", error_kind="fatal")
         fn, timeout = entry
+        if name == "outlook" and str(args.get("action", "")).strip().lower() == "login":
+            timeout = 660
 
         if face_verify:
             identity = await run_sync_tool(
@@ -3969,11 +4014,14 @@ class GHOSTLive:
             timeout=timeout,
             attempts=(
                 1 if (
-                    name == "personal_outlook"
-                    and (
-                        requires_confirmation
-                        or str(args.get("tool_name", "")).strip()
-                            in _PERSONAL_OUTLOOK_NON_RETRYABLE_TOOLS
+                    (name == "outlook" and requires_confirmation)
+                    or (
+                        name == "personal_outlook"
+                        and (
+                            requires_confirmation
+                            or str(args.get("tool_name", "")).strip()
+                                in _PERSONAL_OUTLOOK_NON_RETRYABLE_TOOLS
+                        )
                     )
                 )
                 else 3
@@ -4122,8 +4170,17 @@ class GHOSTLive:
         name = fc.name
         args = dict(fc.args or {})
         args.pop("_ghost_safety_approved", None)
+        args.pop("_ghost_outlook_identity", None)
         tool_ok = True
         tool_error_kind = ""
+
+        identity_error = _bind_outlook_approval_identity(name, args)
+        if identity_error:
+            return types.FunctionResponse(
+                id=fc.id,
+                name=name,
+                response={"result": identity_error},
+            )
 
         from safety import sanitize as _sanitize
         log_tool(name, _sanitize(name, args))
@@ -4405,6 +4462,11 @@ class GHOSTLive:
             entry = self._tool_handlers.get(name)
             if entry is not None:
                 handler, timeout = entry
+                if (
+                    name == "outlook"
+                    and str(args.get("action", "")).strip().lower() == "login"
+                ):
+                    timeout = 660
                 # Normalize only known Personal Outlook aliases.
                 # The worker continues enforcing its strict allowlist.
                 if name == "personal_outlook":
@@ -4434,10 +4496,16 @@ class GHOSTLive:
                     name,
                     timeout=timeout,
                     attempts=(
-                        1 if name == "personal_outlook" and (
-                            requires_confirmation
-                            or str(args.get("tool_name", "")).strip()
-                                in _PERSONAL_OUTLOOK_NON_RETRYABLE_TOOLS
+                        1 if (
+                            (name == "outlook" and requires_confirmation)
+                            or (
+                                name == "personal_outlook"
+                                and (
+                                    requires_confirmation
+                                    or str(args.get("tool_name", "")).strip()
+                                        in _PERSONAL_OUTLOOK_NON_RETRYABLE_TOOLS
+                                )
+                            )
                         )
                         else 3
                     ),

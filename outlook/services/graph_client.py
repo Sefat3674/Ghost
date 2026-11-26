@@ -1,5 +1,7 @@
 """Microsoft Graph client with retries, throttling, token refresh and paging."""
+import base64
 import time
+from types import SimpleNamespace
 
 import requests
 
@@ -19,9 +21,17 @@ class GraphClient:
     """
     GraphClient(access_token)                 - fixed token (legacy usage)
     GraphClient(token_provider=callable)      - re-fetches token on 401
+    GraphClient(backend_transport=auth)        - server-side token use
     """
 
-    def __init__(self, access_token=None, token_provider=None):
+    def __init__(self, access_token=None, token_provider=None,
+                 backend_transport=None):
+        self._backend_transport = backend_transport
+        if backend_transport is not None:
+            self._provider = None
+            self.access_token = None
+            self._session = requests.Session()
+            return
         self._provider = token_provider
         self.access_token = access_token or (token_provider() if token_provider else None)
         if not self.access_token:
@@ -59,6 +69,58 @@ class GraphClient:
 
     def _send(self, method, url, *, params=None, json_data=None, data=None,
               extra_headers=None, content_type="application/json", raw=False):
+        if self._backend_transport is not None:
+            try:
+                response = self._backend_transport.graph_request(
+                    method,
+                    url,
+                    params=params,
+                    json_data=json_data,
+                    extra_headers=extra_headers,
+                    content_type=content_type,
+                    raw=raw,
+                )
+            except requests.exceptions.Timeout as exc:
+                raise GraphAPIError("Outlook backend request timed out.") from exc
+            except requests.exceptions.RequestException as exc:
+                raise GraphAPIError(
+                    f"Outlook backend network error: {exc}"
+                ) from exc
+
+            if not response.ok:
+                try:
+                    detail = response.json().get("detail", {})
+                except ValueError:
+                    detail = {}
+                if isinstance(detail, dict) and "graph_status" in detail:
+                    raise GraphAPIError(
+                        detail.get("message", "Microsoft Graph request failed."),
+                        status=detail.get("graph_status"),
+                        code=detail.get("code"),
+                    )
+                message = detail if isinstance(detail, str) else "Outlook backend request failed."
+                raise GraphAPIError(
+                    message,
+                    status=response.status_code,
+                )
+            if raw:
+                try:
+                    content = response.json()["content_base64"]
+                    decoded = base64.b64decode(content, validate=True)
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise GraphAPIError(
+                        "Outlook backend returned invalid binary content."
+                    ) from exc
+                return SimpleNamespace(content=decoded)
+            if response.status_code == 204 or not response.content:
+                return {}
+            try:
+                return response.json()
+            except ValueError as exc:
+                raise GraphAPIError(
+                    "Outlook backend returned invalid JSON."
+                ) from exc
+
         refreshed = False
         method_upper = method.upper()
         retryable = method_upper == "GET"

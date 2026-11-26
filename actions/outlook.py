@@ -2472,27 +2472,59 @@ def outlook_action(parameters, response=None, player=None):
 
     try:
         auth = get_auth()
+        uses_backend = getattr(auth, "uses_backend", False) is True
 
         if action == "login":
-            auth.login()
+            if uses_backend:
+                email = _text(parameters, "email")
+                if not email:
+                    return (
+                        "Please provide the Microsoft account email address to connect Outlook. "
+                        "Ghost will open Microsoft's sign-in page; never enter your password in Ghost."
+                    )
+                auth.login(email)
+            else:
+                auth.login()
             return f"Signed in to Outlook as {auth.get_account_name() or 'your account'}."
         if action == "logout":
             auth.logout()
             return "Signed out of Outlook. Stored tokens were removed."
         if action == "status":
+            if uses_backend:
+                status = auth.get_account_status()
+                if status.get("connected"):
+                    return f"Outlook is connected as {status['email']}."
+                return (
+                    "Outlook is not connected or needs you to sign in again. "
+                    "Use action='login' and provide your Microsoft account email."
+                )
             who = auth.get_account_name()
             return (f"Outlook is connected as {who}." if auth.is_authenticated()
                     else "Outlook is not connected or the session expired. Use action='login'.")
 
-        token = auth.get_access_token()
-        if not token and action in {"read", "inbox"}:
-            auth.login()
+        if uses_backend:
+            status = auth.get_account_status()
+            if not status.get("connected") and action in {"read", "inbox"}:
+                email = _text(parameters, "email")
+                if email:
+                    auth.login(email)
+                    status = auth.get_account_status()
+            if not status.get("connected"):
+                return (
+                    "Your Outlook account is not connected or needs you to sign in again. "
+                    "Use action='login' with your Microsoft account email first."
+                )
+            graph = GraphClient(backend_transport=auth)
+        else:
             token = auth.get_access_token()
-        if not token:
-            return ("Your Microsoft Outlook session has expired or is not connected. "
-                    "Use action='login' (or sign in to Outlook) first.")
+            if not token and action in {"read", "inbox"}:
+                auth.login()
+                token = auth.get_access_token()
+            if not token:
+                return ("Your Microsoft Outlook session has expired or is not connected. "
+                        "Use action='login' (or sign in to Outlook) first.")
+            graph = GraphClient(token_provider=auth.get_access_token)
 
-        graph = GraphClient(token_provider=auth.get_access_token)
         ctx = SimpleNamespace(
             auth=auth, graph=graph,
             emails=EmailService(graph), folders=FolderService(graph),

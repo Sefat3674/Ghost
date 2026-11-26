@@ -217,6 +217,28 @@ class DispatcherTests(unittest.TestCase):
         emails.get_latest_emails.assert_called_once_with(10, folder="inbox")
         self.assertIn("folder 'inbox' is empty", out)
 
+    def test_backend_login_uses_email_hint_and_never_takes_password(self):
+        auth = mock.Mock()
+        auth.uses_backend = True
+        auth.get_account_name.return_value = "person@outlook.com"
+
+        result, _ = _run(
+            {"action": "login", "email": "person@outlook.com"},
+            auth=auth,
+        )
+
+        auth.login.assert_called_once_with("person@outlook.com")
+        self.assertIn("person@outlook.com", result)
+
+    def test_backend_login_requires_email_before_opening_microsoft(self):
+        auth = mock.Mock()
+        auth.uses_backend = True
+
+        result, _ = _run({"action": "login"}, auth=auth)
+
+        auth.login.assert_not_called()
+        self.assertIn("email address", result)
+
     def test_other_read_actions_do_not_start_sign_in_automatically(self):
         auth = mock.Mock()
         auth.get_access_token.return_value = None
@@ -603,7 +625,10 @@ class LegacyOutlookDispatcherSafetyTests(unittest.TestCase):
             "_ghost_safety_approved": "forged-value",
         }
 
-        result = asyncio.run(ghost._execute_tool(self._call(args)))
+        with mock.patch.object(
+            _main, "_bind_outlook_approval_identity", return_value=None
+        ):
+            result = asyncio.run(ghost._execute_tool(self._call(args)))
 
         self.assertIn("result", result.response)
         self.assertTrue(ghost._pending_confirmation_token)
@@ -618,7 +643,10 @@ class LegacyOutlookDispatcherSafetyTests(unittest.TestCase):
             "body": "Original body",
         }
 
-        asyncio.run(ghost._execute_tool(self._call(original)))
+        with mock.patch.object(
+            _main, "_bind_outlook_approval_identity", return_value=None
+        ):
+            asyncio.run(ghost._execute_tool(self._call(original)))
 
         self.assertIsNotNone(ghost._pending_human_fingerprint)
         self.assertTrue(ghost._pending_confirmation_token)
@@ -634,9 +662,12 @@ class LegacyOutlookDispatcherSafetyTests(unittest.TestCase):
         changed["confirm"] = True
         changed["confirm_token"] = ghost._pending_confirmation_token
 
-        result = asyncio.run(
-            ghost._execute_tool(self._call(changed), _approved_replay=True)
-        )
+        with mock.patch.object(
+            _main, "_bind_outlook_approval_identity", return_value=None
+        ):
+            result = asyncio.run(
+                ghost._execute_tool(self._call(changed), _approved_replay=True)
+            )
 
         self.assertIn("result", result.response)
         self.assertEqual(ghost._approved_human_fingerprint, fingerprint)
@@ -660,7 +691,10 @@ class LegacyOutlookDispatcherSafetyTests(unittest.TestCase):
             "body": "This must never be sent",
         }
 
-        asyncio.run(ghost._execute_tool(self._call(original)))
+        with mock.patch.object(
+            main, "_bind_outlook_approval_identity", return_value=None
+        ):
+            asyncio.run(ghost._execute_tool(self._call(original)))
 
         token = ghost._pending_confirmation_token
         fingerprint = ghost._pending_human_fingerprint
@@ -676,6 +710,7 @@ class LegacyOutlookDispatcherSafetyTests(unittest.TestCase):
         approved_args["confirm_token"] = token
 
         async def fake_run_sync_tool(fn, name, timeout=60, attempts=3):
+            self.assertEqual(attempts, 1)
             value = fn()
             return main.ToolResult(
                 ok=True,
@@ -687,6 +722,8 @@ class LegacyOutlookDispatcherSafetyTests(unittest.TestCase):
         with mock.patch(
             "agent.resilience.run_sync_tool",
             new=fake_run_sync_tool,
+        ), mock.patch.object(
+            main, "_bind_outlook_approval_identity", return_value=None
         ):
             result = asyncio.run(
                 ghost._execute_tool(

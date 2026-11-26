@@ -297,7 +297,10 @@ _TOKEN_TTL_SECONDS = 600
 def _fingerprint(name: str, args: dict | None) -> str:
     """Canonical fingerprint of a blocked call, so a token can't be replayed
     against a different tool or different arguments."""
-    safe = sanitize(name, args or {})
+    args = args or {}
+    safe = sanitize(name, args)
+    if args.get("_ghost_outlook_identity"):
+        safe["_ghost_outlook_identity"] = args["_ghost_outlook_identity"]
     return json.dumps({"name": name, "args": safe}, sort_keys=True, default=str)
 
 
@@ -506,6 +509,7 @@ def describe(name: str, args: dict | None) -> str:
 _SECRET_KEYS = {
     "api_key", "api_key_id", "apikey", "token", "access_token", "auth_token",
     "password", "passwd", "secret", "client_secret", "code", "key",
+    "_ghost_outlook_identity",
 }
 
 
